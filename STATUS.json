@@ -1,19 +1,90 @@
 {
-  "stage": "mainnet-deployed",
+  "stage": "hardening-in-progress-release-blocked",
   "deployed": true,
   "asset_id": 774088414,
   "application_id": 774088598,
-  "application_address": "A2SUZAVEYRGQNXG7PMJP3W3JZHA7F24PRUTGHOQ4Q6AEWC574VR7S5OZEE",
-  "blockers": [
-    "Unlimited supply cannot be represented by a standard Algorand ASA",
-    "Algorand x402 settlement and facilitator conformance not implemented",
-    "Conway Automaton integration not implemented",
-    "Multi-chain signing wallets and frontend not implemented",
-    "AI providers require credentials and live verification",
-    "PQC is off-chain only; on-chain enforcement and independent audit are missing",
-    "No independent audit or public testnet acceptance evidence",
-    "No funded authorized deployer or mainnet transaction evidence"
-  ],
   "mainnet_asset_id": 3737683297,
-  "mainnet_tx_id": "U5LVAFLK462ARKMWPDFZVX5MN24534CDZZ5AXDFHXWGF3R4O2FSA"
+  "mainnet_tx_id": "U5LVAFLK462ARKMWPDFZVX5MN24534CDZZ5AXDFHXWGF3R4O2FSA",
+  "release_blocked": true,
+  "market_ready": false,
+  "avm_execution_status": "BLOCKED (Docker daemon / LocalNet unavailable; off-chain Python models labeled as specification tests)",
+  "smart_contract_architecture": {
+    "deployed_testnet_application": {
+      "app_id": 774088598,
+      "version": "Treasury v1 (Prototype)",
+      "creator": "TPLMGGFNG64LKOCKVB7ZMQH5AMSNMV4GLI7GCH4FY2XQEKSIGB77O6LCFM",
+      "approval_bytes_len": 407,
+      "approval_hash": "C3JX3X2MOYFMDTX3JTOTDJ7TAUKRKVT5B6NVC6WB4LWSQZGYEYBV4OMIWY",
+      "schema": {
+        "global_uints": 4,
+        "global_bytes": 1,
+        "local_uints": 2,
+        "local_bytes": 0
+      },
+      "status": "Deployed prototype; bytecode mismatch with Hardened Treasury v2; creator compromised"
+    },
+    "hardened_treasury_v2": {
+      "source_file": "contracts/hardened_treasury_app.py",
+      "version": "Treasury v2 (TEAL 8 Box Storage)",
+      "approval_bytes_len": 842,
+      "approval_hash": "KYGJKRM6XQLLMOFODXFETKMZR7FCPEKMLFSARY7SHAT3JNG5MEJQZGJXDU",
+      "clear_bytes_len": 4,
+      "storage_architecture": "Application Box Storage (50 bytes per grant box keyed by grant ID)",
+      "schema": {
+        "global_uints": 6,
+        "global_bytes": 1,
+        "local_uints": 0,
+        "local_bytes": 0
+      },
+      "features": [
+        "Box Storage: accounts closing out or clearing state cannot corrupt or orphan grant obligations",
+        "Liquid treasury solvency invariant: total_reserved + proposed <= AssetHolding.balance(app, asset_id)",
+        "Dispute timelock period with governance cancellation prior to beneficiary unlock round",
+        "Exact settlement binding: inner asset disbursement emits canonical note qeq:grant:v1:<network>:<asset_id>:<grant_id>",
+        "Anti-drain inner transaction controls (RekeyTo, AssetCloseTo cleared, zero fee)"
+      ],
+      "status": "Reproducibly compiled to TEAL 8 and validated via live Algod node; NOT YET DEPLOYED on-chain"
+    }
+  },
+  "backend_hardening": {
+    "auth": "Constant-time secret comparison; fails closed (HTTP 503) if ADMIN_API_KEY is missing/whitespace; reviewer identity strictly derived from server-side ADMIN_OPERATOR_IDENTITY",
+    "streaming_limits": "Pure ASGI middleware intercepting chunks mid-stream; enforces 1 MB request body limit with HTTP 413; validates Content-Length headers",
+    "settlement_verification": "Fail-closed treasury allowlist; explicit banning of compromised address TPLMGGFN...; mandatory canonical note format qeq:grant:v1:<network>:<asset_id>:<grant_id>; 10-point normalized payment validation checklist",
+    "relational_storage": "PostgreSQL / SQLite models with unique constraints on (network_identity, root_transaction_id, inner_transaction_path) and grant_id; finite state machine transitions",
+    "migrations": "Automated pre-migration data integrity audit; verified point-in-time database backup; safe DDL application with index assertions"
+  },
+  "security_incident": {
+    "id": "IR-2026-001",
+    "status": "ACTIVE_MITIGATION_BLOCKED",
+    "compromised_address": "TPLMGGFNG64LKOCKVB7ZMQH5AMSNMV4GLI7GCH4FY2XQEKSIGB77O6LCFM",
+    "open_risks": [
+      "Mainnet ASA 3737683297 manager points to compromised address",
+      "Mainnet ASA 3737683297 reserve points to compromised address",
+      "Testnet ASA 774088414 manager points to compromised address",
+      "Testnet ASA 774088414 reserve points to compromised address",
+      "Mainnet account TPLMGGFN... is not rekeyed (auth-addr absent)",
+      "Mainnet account TPLMGGFN... still holds 20.77 ALGO"
+    ],
+    "mitigation_runbook": "docs/INCIDENT_RESPONSE_KEY_EXPOSURE.md",
+    "unsigned_generator": "scripts/rotate_authority_txns.py"
+  },
+  "approved_safe_authority_address": null,
+  "identifiers": {
+    "mainnet_asset_id": 3737683297,
+    "mainnet_tx_id": "U5LVAFLK462ARKMWPDFZVX5MN24534CDZZ5AXDFHXWGF3R4O2FSA",
+    "testnet_asset_id": 774088414,
+    "testnet_tx_id": "GDMORMEM7HLDYVLOMI6T4ZWBEBQXP42TJ6LHTXWEWHQSW4JJVD2Q",
+    "testnet_application_id": 774088598,
+    "testnet_application_address": "A2SUZAVEYRGQNXG7PMJP3W3JZHA7F24PRUTGHOQ4Q6AEWC574VR7S5OZEE"
+  },
+  "blockers": [
+    "Incident IR-2026-001: Mainnet ASA manager and reserve authority must be rotated away from compromised address TPLMGGFN...",
+    "Incident IR-2026-001: Compromised Mainnet account TPLMGGFN... must be rekeyed and 20.77 ALGO evacuated",
+    "Smart Contract Bytecode: Hardened Treasury v2 bytecode (842 bytes, TEAL 8 Box Storage) is NOT yet deployed on Testnet or Mainnet",
+    "AVM Runtime Execution: Local AVM transaction execution is blocked due to missing Docker daemon / LocalNet infrastructure",
+    "Independent third-party professional security audit of PyTeal treasury contracts not yet commissioned",
+    "No secondary market liquidity or live DEX trading pool established (Market Status: Pre-Liquidity)",
+    "Jurisdiction-specific legal opinion on utility token classification pending",
+    "Field partner physical verification network for off-chain grant review not yet established"
+  ]
 }

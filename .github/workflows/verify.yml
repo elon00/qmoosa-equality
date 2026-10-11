@@ -1,21 +1,68 @@
-name: Component checks (not deployment certification)
+name: Reality Gate Verification & Release Gate
 on: [push, pull_request, workflow_dispatch]
 permissions:
   contents: read
+
 jobs:
   components:
+    name: Component & Crypto Unit Tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
       - run: python -m pip install -r requirements.txt
-      - run: python scripts/check.py
-  release-readiness:
+      - run: python scripts/check.py --components
+
+  contracts:
+    name: Smart Contract Compilation & Security Tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install -r requirements.txt
+      - run: python scripts/check.py --contracts
+
+  api-and-db:
+    name: Relational DB & Hardened API Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install -r requirements.txt
+      - run: python scripts/check.py --api
+
+  onchain-ledger-audit:
+    name: Live Algorand Mainnet & Testnet Audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install -r requirements.txt
+      - run: python scripts/check.py --onchain
+
+  release-readiness-gate:
+    name: Production Release Gate (Fails Closed on Incident IR-2026-001)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'

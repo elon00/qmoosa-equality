@@ -4,3 +4,7 @@ __pycache__/
 *.unsigned
 *.key
 *.pem
+*.sqlite
+*.db
+data/*.db
+data/backups/
