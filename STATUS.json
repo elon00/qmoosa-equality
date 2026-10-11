@@ -1,0 +1,17 @@
+{
+  "stage": "experimental-source-only",
+  "deployed": false,
+  "asset_id": null,
+  "application_id": null,
+  "blockers": [
+    "No on-chain grant treasury, governance, or issuance contract implemented",
+    "Unlimited supply cannot be represented by a standard Algorand ASA",
+    "Algorand x402 settlement and facilitator conformance not implemented",
+    "Conway Automaton integration not implemented",
+    "Multi-chain signing wallets and frontend not implemented",
+    "AI providers require credentials and live verification",
+    "PQC is off-chain only; on-chain enforcement and independent audit are missing",
+    "No independent audit or public testnet acceptance evidence",
+    "No funded authorized deployer or mainnet transaction evidence"
+  ]
+}
