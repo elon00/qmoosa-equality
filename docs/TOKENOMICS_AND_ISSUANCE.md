@@ -11,8 +11,9 @@
 The on-chain ledger records:
 - **Total Supply (Base Units)**: `1,000,000,000,000` (uint64)
 - **Decimals**: `6`
-- **Fungible Token Units**:
-  $$\text{Circulating Supply} = \frac{1,000,000,000,000}{10^6} = 1,000,000.000000 \text{ QEQ}$$
+- **Total Minted Supply**:
+  $$\text{Total Supply} = \frac{1,000,000,000,000}{10^6} = 1,000,000.000000 \text{ QEQ}$$
+- **Circulating Supply**: Currently **0 QEQ** (100% of supply is held by the reserve address, pending transfer into the hardened treasury escrow contract).
 
 > [!IMPORTANT]
 > **Definitive Supply Truth**: Under Algorand L1 consensus, an Algorand Standard Asset (ASA) has an **immutable total supply**. The total cannot be increased or printed on-chain without creating a completely new asset. Therefore, QEQ is currently a **fixed-supply token capped at 1,000,000 QEQ**, not an unlimited-supply currency.
@@ -25,11 +26,11 @@ To address long-term community economic inclusion, three architectures are evalu
 
 | Architecture | Mechanism | Dilution Risk | Wallet Compatibility | Governance Complexity | Migration Burden |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **Model A: Fixed ASA + Treasury Escrow (Current)** | Fixed 1,000,000 QEQ minted at genesis; 100% held in reserve and unlocked via stateful treasury contracts. | Zero unexpected dilution; capped forever. | 100% native Algorand wallet compatibility (Pera, Defly, Ledger). | Low: Admin/Multisig proposes grants; timelocked claims. | None required; currently deployed. |
+| **Model A: Fixed ASA + Treasury Escrow (Selected Baseline)** | Fixed 1,000,000 QEQ minted at genesis; 100% held in reserve and unlocked via stateful treasury contracts. | Zero unexpected dilution; capped forever. | 100% native Algorand wallet compatibility (Pera, Defly, Ledger). | Low: Admin/Multisig proposes grants; timelocked claims. | None for ASA; requires Treasury v2 on-chain deployment. |
 | **Model B: Smart Contract Mintable Token (ARC-200)** | Application-managed balance ledger simulating ERC-20 on Algorand. Allows minting via contract logic. | Controlled by contract logic, but introduces bug/inflation risk. | Requires ARC-200 indexer and custom wallet support; limited DEX support. | High: DAO/Multisig manages minter keys. | High: Requires deploying application and migrating holders. |
 | **Model C: Multi-Asset Epoch Series** | Discrete ASAs issued each funding epoch (e.g. `QEQ-2026`, `QEQ-2027`). | Isolated per epoch; no retroactive dilution. | Good for base transfers, but fragments liquidity across assets. | Moderate: Each asset requires separate configuration. | High: Separate liquidity pools and opt-ins required per epoch. |
 
-**Engineering Recommendation**: **Model A** is selected and deployed for initial production stability. Model B (ARC-200) should only be considered after independent smart contract audit and widespread DEX adoption of ARC-200.
+**Engineering Recommendation**: **Model A** is selected as the baseline architecture. On-chain deployment currently includes only the ASA on Mainnet/Testnet; deploying the Hardened Treasury v2 contract and transferring reserve holdings into it are mandatory prerequisites for production release. Model B (ARC-200) should only be evaluated following an independent smart contract audit and widespread DEX ecosystem adoption.
 
 ---
 
@@ -64,7 +65,7 @@ Token issuance is a coordination mechanism, not revenue or collateral. Issuing t
 
 ### Dilution & Issuance Cap:
 $$\text{Annual Issuance Budget} \le \min\left(\frac{\text{Previous Supply} \times 500}{10000}, \text{Verified Funding}\right)$$
-The proposed annual new issuance ceiling is **5% (500 bps)**, with unfunded printing forbidden.
+The proposed annual new issuance ceiling is **5% (500 bps)** (applicable only to any future asset or epoch series, as the genesis ASA supply is mathematically fixed on-chain), with unfunded printing strictly forbidden.
 
 ### Runway Scenarios:
 1. **Conservative Disbursement**: 50,000 QEQ disbursed per year $\rightarrow$ 20-year operational runway.

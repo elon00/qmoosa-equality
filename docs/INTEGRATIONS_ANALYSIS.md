@@ -13,8 +13,8 @@ This document provides a rigorous, evidence-based audit of all third-party integ
   - `tests/test_core.py::CoreTests::test_payment_fail_closed` verifies that unverified payment access immediately raises `RuntimeError`.
   - `tests/test_core.py::CoreTests::test_no_plaintext_provider` verifies that non-HTTPS URLs are rejected.
 - **Current Limitations & Truth Assessment**:
-  - Current upstream x402 facilitators officially support Base (EVM) and Solana settlement rails, but do **NOT** have native Algorand settlement facilitator support.
-  - An HTTP `402 Payment Required` response alone is not protocol compliance. Settlement requires on-chain transaction verification, escrow clearance, and replay protection.
+  - The specific third-party hosted facilitators reviewed default to EVM/Solana networks; however, Algorand V2 direct-payment verification and settlement schemes (as documented in `@x402/avm`) settle via atomic transaction groups directly to `payTo` addresses on Mainnet and Testnet.
+  - An HTTP `402 Payment Required` response header alone is not protocol compliance. Verification requirements depend on the scheme: direct-payment schemes require on-chain transaction confirmation, exact recipient and amount matches, and durable replay protection, while escrow-mediated schemes also require on-chain contract clearance.
   - **Status**: **NOT IMPLEMENTED ON-CHAIN (FAIL-CLOSED BOUNDARY ENFORCED)**.
 
 ---

@@ -42,7 +42,7 @@ To transition from pre-market to live decentralized trading:
    Administrative authority must be transferred to an uncompromised multisig account before funding public liquidity pools.
 2. **Dedicated Liquidity Bootstrap**:
    - The deployer must pair a fraction of QEQ reserve (e.g. 50,000 QEQ) with a matching balance of ALGO or USDC on [Tinyman AMM](https://app.tinyman.org/).
-   - The resulting Liquidity Provider (LP) tokens should be burned or locked in an escrow contract to guarantee long-term pool stability.
+   - The resulting Liquidity Provider (LP) tokens should be burned or locked in an escrow contract to restrict premature withdrawals and protect initial pool liquidity (without guaranteeing market price or trading-depth stability).
 3. **Price Discovery Disclaimer**:
    - Initial price is determined entirely by the ratio of ALGO to QEQ deposited in the AMM pool.
    - The protocol does not guarantee any minimum token valuation or stable exchange rate.

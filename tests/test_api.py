@@ -8,6 +8,11 @@ from fastapi import HTTPException
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
+TEMP_DB = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
+TEMP_DB.close()
+TEST_DB_PATH = Path(TEMP_DB.name)
+os.environ["DATABASE_URL"] = f"sqlite:///{TEST_DB_PATH}"
+
 from backend.db import Base, get_db, GrantProposal, GrantStatus
 import backend.main as backend_module
 from backend.main import (
@@ -17,10 +22,6 @@ from backend.main import (
     TESTNET_TREASURY_APP_ADDRESS,
 )
 from fastapi.testclient import TestClient
-
-TEMP_DB = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
-TEMP_DB.close()
-TEST_DB_PATH = Path(TEMP_DB.name)
 
 test_engine = create_engine(f"sqlite:///{TEST_DB_PATH}", connect_args={"check_same_thread": False})
 TestSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=test_engine)

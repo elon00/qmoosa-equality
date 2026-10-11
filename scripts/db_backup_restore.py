@@ -3,6 +3,7 @@ import argparse
 import hashlib
 import json
 import shutil
+import sqlite3
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -24,13 +25,25 @@ def compute_file_sha256(filepath: Path) -> str:
     return h.hexdigest()
 
 def backup_db() -> Path:
-    if not DEFAULT_DB_PATH.exists():
-        print(f"Database file not found at {DEFAULT_DB_PATH}. Initializing empty DB first.")
+    db_url = str(engine.url)
+    if not db_url.startswith("sqlite"):
+        raise ValueError("Online snapshot backup is only supported for SQLite databases.")
+
+    db_path = Path(engine.url.database) if engine.url.database else DEFAULT_DB_PATH
+    if not db_path.exists():
+        print(f"Database file not found at {db_path}. Initializing empty DB first.")
         init_db()
 
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%SZ")
     backup_file = BACKUP_DIR / f"qmoosa_db_{timestamp}.sqlite"
-    shutil.copy2(DEFAULT_DB_PATH, backup_file)
+
+    # Use SQLite online backup API to ensure journal/WAL consistency
+    src_conn = sqlite3.connect(db_path)
+    dst_conn = sqlite3.connect(backup_file)
+    with dst_conn:
+        src_conn.backup(dst_conn)
+    dst_conn.close()
+    src_conn.close()
 
     checksum = compute_file_sha256(backup_file)
     meta_file = BACKUP_DIR / f"qmoosa_db_{timestamp}.meta.json"
@@ -42,7 +55,7 @@ def backup_db() -> Path:
 
     metadata = {
         "timestamp": timestamp,
-        "source_path": str(DEFAULT_DB_PATH),
+        "source_path": str(db_path),
         "backup_path": str(backup_file),
         "sha256": checksum,
         "size_bytes": backup_file.stat().st_size,
@@ -71,8 +84,12 @@ def restore_db(backup_file: Path) -> bool:
             print(f"Checksum mismatch: expected {expected_checksum}, got {actual_checksum}", file=sys.stderr)
             return False
 
-    shutil.copy2(backup_file, DEFAULT_DB_PATH)
-    print(f"Restored database to {DEFAULT_DB_PATH} from {backup_file}")
+    db_path = Path(engine.url.database) if engine.url.database else DEFAULT_DB_PATH
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    temp_target = db_path.with_suffix(".tmp_restore")
+    shutil.copy2(backup_file, temp_target)
+    temp_target.replace(db_path)
+    print(f"Restored database to {db_path} from {backup_file}")
     return True
 
 if __name__ == "__main__":
@@ -88,4 +105,6 @@ if __name__ == "__main__":
     if args.command == "backup":
         backup_db()
     elif args.command == "restore":
-        restore_db(args.backup_file)
+        success = restore_db(args.backup_file)
+        if not success:
+            sys.exit(1)

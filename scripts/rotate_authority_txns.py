@@ -40,8 +40,7 @@ def main():
             amt=0,
             rekey_to=args.rekey_to
         )
-        with open(out_file, "wb") as f:
-            f.write(encoding.msgpack_encode(txn).encode("latin1") if isinstance(encoding.msgpack_encode(txn), str) else encoding.msgpack_encode(txn))
+        transaction.write_to_file([txn], out_file)
         print("=" * 65)
         print("GENERATED UNSIGNED REKEY TRANSACTION")
         print("=" * 65)
@@ -69,8 +68,7 @@ def main():
             clawback=None,
             strict_empty_address_check=False
         )
-        with open(out_file, "wb") as f:
-            f.write(encoding.msgpack_encode(txn).encode("latin1") if isinstance(encoding.msgpack_encode(txn), str) else encoding.msgpack_encode(txn))
+        transaction.write_to_file([txn], out_file)
         print("=" * 65)
         print("GENERATED UNSIGNED ASA MANAGER ROTATION TRANSACTION")
         print("=" * 65)

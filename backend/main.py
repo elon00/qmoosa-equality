@@ -58,12 +58,28 @@ MAX_REQUEST_BYTES = 1024 * 1024  # 1 MB
 
 @app.middleware("http")
 async def security_and_limit_middleware(request: Request, call_next):
-    content_length = request.headers.get("content-length")
-    if content_length and int(content_length) > MAX_REQUEST_BYTES:
-        return JSONResponse(
-            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            content={"detail": "Payload exceeds 1 MB limit."},
-        )
+    content_length_str = request.headers.get("content-length")
+    if content_length_str is not None:
+        try:
+            content_length = int(content_length_str)
+            if content_length > MAX_REQUEST_BYTES:
+                return JSONResponse(
+                    status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                    content={"detail": "Payload exceeds 1 MB limit."},
+                )
+        except ValueError:
+            return JSONResponse(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                content={"detail": "Invalid Content-Length header."},
+            )
+
+    if request.method in ("POST", "PUT", "PATCH"):
+        body = await request.body()
+        if len(body) > MAX_REQUEST_BYTES:
+            return JSONResponse(
+                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                content={"detail": "Payload exceeds 1 MB limit."},
+            )
 
     response: Response = await call_next(request)
     response.headers["X-Content-Type-Options"] = "nosniff"
