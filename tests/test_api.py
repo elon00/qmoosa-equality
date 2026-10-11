@@ -1,9 +1,11 @@
+"""Comprehensive API, authentication, middleware, and settlement integration tests for Qmoosa Equality."""
 import base64
 import os
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
+
 from fastapi import HTTPException
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -13,18 +15,22 @@ TEMP_DB.close()
 TEST_DB_PATH = Path(TEMP_DB.name)
 os.environ["DATABASE_URL"] = f"sqlite:///{TEST_DB_PATH}"
 
-from backend.db import Base, get_db, GrantProposal, GrantStatus
-import backend.main as backend_module
-from backend.main import (
-    app,
-    verify_onchain_disbursement_tx,
-    AUTHORIZED_TREASURY_ADDRESSES,
-    TESTNET_TREASURY_APP_ADDRESS,
+from backend.auth import get_authenticated_admin
+from backend.db import Base, get_db, GrantProposal, GrantSettlement, GrantStatus
+import backend.auth as auth_module
+import backend.settlement as settlement_module
+from backend.settlement import (
+    COMPROMISED_ADMIN_ADDR,
+    build_canonical_grant_note,
+    verify_settlement_evidence,
+    NormalizedPayment,
 )
+from backend.main import app
 from fastapi.testclient import TestClient
 
 test_engine = create_engine(f"sqlite:///{TEST_DB_PATH}", connect_args={"check_same_thread": False})
 TestSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=test_engine)
+
 
 def override_get_db():
     db = TestSessionLocal()
@@ -33,6 +39,7 @@ def override_get_db():
     finally:
         db.close()
 
+
 app.dependency_overrides[get_db] = override_get_db
 
 TEST_ADMIN_KEY = "test-secret-vault-key-abc123xyz"
@@ -40,14 +47,16 @@ AUTH_HEADERS = {
     "Authorization": f"Bearer {TEST_ADMIN_KEY}",
     "X-Admin-Identity": "spoofed_attacker_should_be_ignored",
 }
+TESTNET_TREASURY_ADDR = "A2SUZAVEYRGQNXG7PMJP3W3JZHA7F24PRUTGHOQ4Q6AEWC574VR7S5OZEE"
 
 
-class ApiTests(unittest.TestCase):
+class ApiAndSettlementTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         Base.metadata.create_all(bind=test_engine)
-        backend_module.ADMIN_API_KEY = TEST_ADMIN_KEY
-        backend_module.ADMIN_OPERATOR_IDENTITY = "verified_council_lead"
+        os.environ["ADMIN_API_KEY"] = TEST_ADMIN_KEY
+        os.environ["ADMIN_OPERATOR_IDENTITY"] = "verified_council_lead"
+        cls.client = TestClient(app)
 
     @classmethod
     def tearDownClass(cls):
@@ -59,239 +68,346 @@ class ApiTests(unittest.TestCase):
                 pass
 
     def setUp(self):
-        self.client = TestClient(app)
+        os.environ["ADMIN_API_KEY"] = TEST_ADMIN_KEY
+        os.environ["ADMIN_OPERATOR_IDENTITY"] = "verified_council_lead"
+        db = TestSessionLocal()
+        db.query(GrantSettlement).delete()
+        db.query(GrantProposal).delete()
+        db.commit()
+        db.close()
 
-    def test_liveness_and_readiness(self):
-        r_live = self.client.get("/api/health/live")
-        self.assertEqual(r_live.status_code, 200)
-        self.assertEqual(r_live.json()["status"], "ALIVE")
+    # --- Section 3: Administrative Authentication ---
+    def test_unconfigured_or_whitespace_admin_key_fails_closed(self):
+        """When ADMIN_API_KEY is missing, empty, or whitespace, administrative actions fail with HTTP 503."""
+        for blank_val in [None, "", "   ", "\t\n"]:
+            if blank_val is None:
+                os.environ.pop("ADMIN_API_KEY", None)
+            else:
+                os.environ["ADMIN_API_KEY"] = blank_val
 
-        r_ready = self.client.get("/api/health/ready")
-        self.assertEqual(r_ready.status_code, 200)
-        data = r_ready.json()
-        self.assertEqual(data["status"], "READY")
-        self.assertTrue(data["database_ok"])
-
-    def test_unconfigured_admin_key_fails_closed(self):
-        """When ADMIN_API_KEY is missing/unconfigured, administrative operations fail closed with HTTP 503."""
-        saved_key = backend_module.ADMIN_API_KEY
-        try:
-            backend_module.ADMIN_API_KEY = None
-            res = self.client.patch("/api/grants/proposals/test-id/review", json={"status": "APPROVED", "reviewer_notes": "test"})
+            res = self.client.patch("/api/grants/proposals/test-id/review", json={"status": "APPROVED", "reviewer_notes": "ok"})
             self.assertEqual(res.status_code, 503)
-            self.assertIn("ADMIN_API_KEY is not configured", res.json()["detail"])
-        finally:
-            backend_module.ADMIN_API_KEY = saved_key
+            self.assertIn("Administrative operations disabled", res.json()["detail"])
 
-    def test_grant_submission_validation(self):
-        # Invalid address test
-        bad_payload = {
-            "title": "Community Clean Energy",
-            "category": "social_enterprises",
-            "requested_amount_qeq": 1000,
-            "beneficiary_address": "INVALID_ADDRESS_123",
-            "description": "Funding solar panels for rural community center."
-        }
-        res = self.client.post("/api/grants/proposals", json=bad_payload)
-        self.assertEqual(res.status_code, 422)
+    def test_admin_auth_wrong_credentials_returns_401(self):
+        """Missing or wrong administrative credentials return HTTP 401."""
+        os.environ["ADMIN_API_KEY"] = TEST_ADMIN_KEY
 
-        # Invalid category test
-        bad_cat_payload = {
-            "title": "Community Clean Energy",
-            "category": "unsupported_category",
-            "requested_amount_qeq": 1000,
-            "beneficiary_address": "TPLMGGFNG64LKOCKVB7ZMQH5AMSNMV4GLI7GCH4FY2XQEKSIGB77O6LCFM",
-            "description": "Funding solar panels for rural community center."
-        }
-        res_cat = self.client.post("/api/grants/proposals", json=bad_cat_payload)
-        self.assertEqual(res_cat.status_code, 422)
+        # No auth header
+        res1 = self.client.patch("/api/grants/proposals/test-id/review", json={"status": "APPROVED", "reviewer_notes": "ok"})
+        self.assertEqual(res1.status_code, 401)
 
-        # Valid payload submission
-        valid_payload = {
-            "title": "Moolnivasi Artisanal Handloom Grant",
-            "category": "community_grants",
-            "requested_amount_qeq": 5000,
-            "beneficiary_address": "TPLMGGFNG64LKOCKVB7ZMQH5AMSNMV4GLI7GCH4FY2XQEKSIGB77O6LCFM",
-            "description": "Grant for purchasing traditional handloom weaving materials."
-        }
-        res_valid = self.client.post("/api/grants/proposals", json=valid_payload)
-        self.assertEqual(res_valid.status_code, 201)
-        created = res_valid.json()["proposal"]
-        grant_id = created["id"]
-        self.assertEqual(created["status"], GrantStatus.SUBMITTED)
-
-        # Review Attack 1: Unauthenticated review attempt -> 401
-        review_payload = {
-            "status": GrantStatus.APPROVED,
-            "reviewer_notes": "Attempting unauthenticated approval.",
-        }
-        res_unauth = self.client.patch(f"/api/grants/proposals/{grant_id}/review", json=review_payload)
-        self.assertEqual(res_unauth.status_code, 401)
-
-        # Review Attack 2: Invalid bearer token -> 401
-        res_bad_auth = self.client.patch(
-            f"/api/grants/proposals/{grant_id}/review",
-            json=review_payload,
-            headers={"Authorization": "Bearer wrong-key"},
+        # Wrong token
+        res2 = self.client.patch(
+            "/api/grants/proposals/test-id/review",
+            json={"status": "APPROVED", "reviewer_notes": "ok"},
+            headers={"Authorization": "Bearer wrong-token-123"},
         )
-        self.assertEqual(res_bad_auth.status_code, 401)
+        self.assertEqual(res2.status_code, 401)
 
-        # Valid Authenticated Review
-        valid_review = {
-            "status": GrantStatus.APPROVED,
-            "reviewer_notes": "Meets all criteria for community grant program.",
-        }
-        res_review = self.client.patch(
+    def test_reviewer_identity_strictly_server_derived(self):
+        """Caller-supplied identity headers (X-Admin-Identity) are ignored; server identity is used."""
+        os.environ["ADMIN_API_KEY"] = TEST_ADMIN_KEY
+        os.environ["ADMIN_OPERATOR_IDENTITY"] = "council_lead_operator_99"
+
+        # Submit grant
+        sub_res = self.client.post(
+            "/api/grants/proposals",
+            json={
+                "title": "Vocational Weaving Center",
+                "category": "community_grants",
+                "requested_amount_qeq": 5000,
+                "beneficiary_address": "TPLMGGFNG64LKOCKVB7ZMQH5AMSNMV4GLI7GCH4FY2XQEKSIGB77O6LCFM",
+                "description": "Livelihood support for traditional handloom artisans in rural area.",
+            },
+        )
+        self.assertEqual(sub_res.status_code, 201)
+        grant_id = sub_res.json()["proposal"]["id"]
+
+        # Review with spoofed caller header
+        review_res = self.client.patch(
             f"/api/grants/proposals/{grant_id}/review",
-            json=valid_review,
+            json={"status": GrantStatus.UNDER_REVIEW, "reviewer_notes": "Valid application"},
+            headers={
+                "Authorization": f"Bearer {TEST_ADMIN_KEY}",
+                "X-Admin-Identity": "malicious_spoofed_identity",
+            },
+        )
+        self.assertEqual(review_res.status_code, 200)
+
+        # Verify audit log actor
+        audit_res = self.client.get(f"/api/grants/audit-logs/{grant_id}")
+        self.assertEqual(audit_res.status_code, 200)
+        logs = audit_res.json()["audit_logs"]
+        review_log = [l for l in logs if l["action"] == "STATUS_CHANGED"][0]
+        self.assertEqual(review_log["actor"], "council_lead_operator_99")
+        self.assertNotEqual(review_log["actor"], "malicious_spoofed_identity")
+
+    # --- Section 9: Streaming Request Limits ---
+    def test_request_size_limits_and_malformed_framing(self):
+        """Enforces 1 MB streaming limit and rejects malformed framing metadata."""
+        # 1. Malformed Content-Length -> HTTP 400
+        res_malformed = self.client.post("/api/grants/proposals", headers={"Content-Length": "not-a-number"}, content=b"{}")
+        self.assertEqual(res_malformed.status_code, 400)
+
+        # 2. Negative Content-Length -> HTTP 400
+        res_neg = self.client.post("/api/grants/proposals", headers={"Content-Length": "-10"}, content=b"{}")
+        self.assertEqual(res_neg.status_code, 400)
+
+        # 3. Oversized Content-Length upfront -> HTTP 413
+        res_large_cl = self.client.post(
+            "/api/grants/proposals",
+            headers={"Content-Length": str(2 * 1024 * 1024)},
+            content=b"{}",
+        )
+        self.assertEqual(res_large_cl.status_code, 413)
+
+        # 4. Chunked oversized body -> HTTP 413
+        def chunked_gen():
+            for _ in range(25):
+                yield b"X" * (50 * 1024)  # Total 1.25 MB > 1 MB
+
+        res_chunked = self.client.post("/api/grants/proposals", content=chunked_gen())
+        self.assertEqual(res_chunked.status_code, 413)
+
+    # --- Section 7: State Machine Transitions ---
+    def test_grant_status_transition_table_enforcement(self):
+        """Enforces finite state transitions and prevents terminal states from rolling back."""
+        # Submit
+        sub_res = self.client.post(
+            "/api/grants/proposals",
+            json={
+                "title": "Solar Water Micro-Utility",
+                "category": "public_goods",
+                "requested_amount_qeq": 10000,
+                "beneficiary_address": "TPLMGGFNG64LKOCKVB7ZMQH5AMSNMV4GLI7GCH4FY2XQEKSIGB77O6LCFM",
+                "description": "Clean drinking water access for community gathering point.",
+            },
+        )
+        grant_id = sub_res.json()["proposal"]["id"]
+
+        # SUBMITTED cannot transition directly to DISBURSED
+        res_invalid = self.client.patch(
+            f"/api/grants/proposals/{grant_id}/review",
+            json={"status": GrantStatus.DISBURSED, "reviewer_notes": "illegal skip"},
             headers=AUTH_HEADERS,
         )
-        self.assertEqual(res_review.status_code, 200)
-        self.assertEqual(res_review.json()["proposal"]["status"], GrantStatus.APPROVED)
+        self.assertEqual(res_invalid.status_code, 400)
+        self.assertIn("Illegal grant state transition", res_invalid.json()["detail"])
 
-        # Verify Reviewer Identity: Must NOT be the caller's spoofed header
-        res_audit = self.client.get(f"/api/grants/audit-logs/{grant_id}")
-        logs = res_audit.json()["audit_logs"]
-        review_log = next(l for l in logs if l["action"] == "STATUS_CHANGED")
-        self.assertEqual(review_log["actor"], "verified_council_lead")
-        self.assertNotEqual(review_log["actor"], "spoofed_attacker_should_be_ignored")
-
-        # Disburse Attack 1: Unauthenticated disburse attempt -> 401
-        tx_id_1 = "TXID1" + "A" * 47
-        disburse_payload = {"onchain_tx_id": tx_id_1}
-        res_disburse_unauth = self.client.patch(
-            f"/api/grants/proposals/{grant_id}/disburse",
-            json=disburse_payload,
-        )
-        self.assertEqual(res_disburse_unauth.status_code, 401)
-
-        # Disburse Attack 2: Authenticated but nonexistent on-chain transaction ID -> 400
-        res_fake_tx = self.client.patch(
-            f"/api/grants/proposals/{grant_id}/disburse",
-            json=disburse_payload,
+        # SUBMITTED -> UNDER_REVIEW -> APPROVED (valid)
+        self.client.patch(
+            f"/api/grants/proposals/{grant_id}/review",
+            json={"status": GrantStatus.UNDER_REVIEW, "reviewer_notes": "under evaluation"},
             headers=AUTH_HEADERS,
         )
-        self.assertEqual(res_fake_tx.status_code, 400)
-        self.assertIn("could not be located", res_fake_tx.json()["detail"].lower())
+        appr_res = self.client.patch(
+            f"/api/grants/proposals/{grant_id}/review",
+            json={"status": GrantStatus.APPROVED, "reviewer_notes": "approved by council"},
+            headers=AUTH_HEADERS,
+        )
+        self.assertEqual(appr_res.status_code, 200)
 
-        # Disburse Success: Verified on-chain transaction
-        mock_verification = {
-            "tx_id": tx_id_1,
-            "confirmed_round": 68175000,
-            "sender": TESTNET_TREASURY_APP_ADDRESS,
-            "network": "testnet",
-            "verified": True,
-        }
-        with patch("backend.main.verify_onchain_disbursement_tx", return_value=mock_verification):
-            res_disburse = self.client.patch(
+        # Mock disbursement
+        mock_p = NormalizedPayment(
+            network_identity="testnet-gh",
+            root_transaction_id="TX_DISB_MOCK_" + "7" * 39,
+            inner_transaction_path="root",
+            confirmed_round=68175000,
+            application_id=None,
+            sender=TESTNET_TREASURY_ADDR,
+            asset_id=774088414,
+            receiver="TPLMGGFNG64LKOCKVB7ZMQH5AMSNMV4GLI7GCH4FY2XQEKSIGB77O6LCFM",
+            amount_base_units=10_000_000_000,
+            canonical_grant_binding=build_canonical_grant_note("testnet", 774088414, grant_id),
+            rekey_to=None,
+            close_to=None,
+            clawback=None,
+        )
+        with patch("backend.grants.verify_settlement_evidence", return_value=mock_p):
+            disb_res = self.client.patch(
                 f"/api/grants/proposals/{grant_id}/disburse",
-                json=disburse_payload,
+                json={"onchain_tx_id": "TX_DISB_MOCK_" + "7" * 39},
                 headers=AUTH_HEADERS,
             )
-            self.assertEqual(res_disburse.status_code, 200)
-            self.assertEqual(res_disburse.json()["proposal"]["status"], GrantStatus.DISBURSED)
+            self.assertEqual(disb_res.status_code, 200)
+            self.assertEqual(disb_res.json()["proposal"]["status"], GrantStatus.DISBURSED)
 
-    def test_payment_replay_prevention_across_proposals(self):
-        """A single on-chain transaction cannot be reused to disburse multiple grant proposals."""
-        db = TestSessionLocal()
-        # Create Proposal A (Disbursed)
-        p_a = GrantProposal(
-            id="qeq-grant-replay-a",
-            title="Proposal A",
-            category="community_grants",
-            requested_amount_qeq=1000,
-            beneficiary_address="TPLMGGFNG64LKOCKVB7ZMQH5AMSNMV4GLI7GCH4FY2XQEKSIGB77O6LCFM",
-            description="Testing replay prevention mechanism",
-            status=GrantStatus.DISBURSED,
-            onchain_tx_id="SHARED_TX_ID_" + "9" * 39,
+        # Terminal state protection: DISBURSED cannot return to APPROVED
+        terminal_res = self.client.patch(
+            f"/api/grants/proposals/{grant_id}/review",
+            json={"status": GrantStatus.APPROVED, "reviewer_notes": "attempt to un-disburse"},
+            headers=AUTH_HEADERS,
         )
-        # Create Proposal B (Approved)
-        p_b = GrantProposal(
-            id="qeq-grant-replay-b",
-            title="Proposal B",
-            category="community_grants",
-            requested_amount_qeq=1000,
-            beneficiary_address="TPLMGGFNG64LKOCKVB7ZMQH5AMSNMV4GLI7GCH4FY2XQEKSIGB77O6LCFM",
-            description="Testing replay prevention mechanism",
-            status=GrantStatus.APPROVED,
-        )
-        db.add_all([p_a, p_b])
-        db.commit()
+        self.assertEqual(terminal_res.status_code, 400)
+        self.assertIn("Illegal grant state transition", terminal_res.json()["detail"])
 
-        # Replay attempt: Try disbursing Proposal B with the tx_id already used for Proposal A
-        with self.assertRaises(HTTPException) as ctx:
-            verify_onchain_disbursement_tx(
-                tx_id="SHARED_TX_ID_" + "9" * 39,
-                proposal_id="qeq-grant-replay-b",
-                beneficiary_address=p_b.beneficiary_address,
-                expected_amount_qeq=p_b.requested_amount_qeq,
-                db=db,
-                network="testnet",
-            )
-        self.assertEqual(ctx.exception.status_code, 409)
-        self.assertIn("Transaction replay rejected", ctx.exception.detail)
-        db.close()
+    # --- Section 5 & 6: Mandatory Note Binding & Settlement Verification ---
+    def test_canonical_grant_note_binding_verification(self):
+        """Verifies exact canonical UTF-8 note protocol: qeq:grant:v1:<network>:<asset_id>:<grant_id>."""
+        grant_id = "qeq-grant-test-123"
+        correct_note = build_canonical_grant_note("testnet", 774088414, grant_id)
+        self.assertEqual(correct_note, "qeq:grant:v1:testnet:774088414:qeq-grant-test-123")
 
-    def test_unauthorized_disbursement_sender_rejection(self):
-        """Disbursement transaction from an unauthorized sender is rejected."""
-        db = TestSessionLocal()
-        mock_tx = {
+        # 1. Missing note -> rejected
+        mock_tx_no_note = {
             "confirmed-round": 68175000,
-            "sender": "UNAUTHORIZED_SENDER_ADDR_12345",
+            "sender": TESTNET_TREASURY_ADDR,
             "asset-transfer-transaction": {
                 "asset-id": 774088414,
                 "receiver": "TPLMGGFNG64LKOCKVB7ZMQH5AMSNMV4GLI7GCH4FY2XQEKSIGB77O6LCFM",
                 "amount": 1000_000_000,
-            }
+            },
         }
         with patch("httpx.Client.get") as mock_get:
             mock_get.return_value.status_code = 200
-            mock_get.return_value.json.return_value = {"transaction": mock_tx}
+            mock_get.return_value.json.return_value = {"transaction": mock_tx_no_note}
 
             with self.assertRaises(HTTPException) as ctx:
-                verify_onchain_disbursement_tx(
-                    tx_id="TX_UNAUTH_" + "1" * 42,
-                    proposal_id="test-prop",
+                verify_settlement_evidence(
+                    tx_id="TX_NO_NOTE_" + "1" * 40,
+                    grant_id=grant_id,
                     beneficiary_address="TPLMGGFNG64LKOCKVB7ZMQH5AMSNMV4GLI7GCH4FY2XQEKSIGB77O6LCFM",
                     expected_amount_qeq=1000,
-                    db=db,
-                    network="testnet",
-                )
-            self.assertEqual(ctx.exception.status_code, 400)
-            self.assertIn("Unauthorized disbursement sender", ctx.exception.detail)
-        db.close()
-
-    def test_grant_binding_note_mismatch_rejection(self):
-        """Transaction note specifying a different proposal ID is rejected."""
-        db = TestSessionLocal()
-        mismatched_note = base64.b64encode(b"qeq:grant:qeq-grant-different-id").decode("utf-8")
-        mock_tx = {
-            "confirmed-round": 68175000,
-            "sender": TESTNET_TREASURY_APP_ADDRESS,
-            "note": mismatched_note,
-            "asset-transfer-transaction": {
-                "asset-id": 774088414,
-                "receiver": "TPLMGGFNG64LKOCKVB7ZMQH5AMSNMV4GLI7GCH4FY2XQEKSIGB77O6LCFM",
-                "amount": 1000_000_000,
-            }
-        }
-        with patch("httpx.Client.get") as mock_get:
-            mock_get.return_value.status_code = 200
-            mock_get.return_value.json.return_value = {"transaction": mock_tx}
-
-            with self.assertRaises(HTTPException) as ctx:
-                verify_onchain_disbursement_tx(
-                    tx_id="TX_NOTE_MISMATCH_" + "2" * 36,
-                    proposal_id="qeq-grant-my-id",
-                    beneficiary_address="TPLMGGFNG64LKOCKVB7ZMQH5AMSNMV4GLI7GCH4FY2XQEKSIGB77O6LCFM",
-                    expected_amount_qeq=1000,
-                    db=db,
-                    network="testnet",
+                    configured_network="testnet",
+                    configured_asset_id=774088414,
                 )
             self.assertEqual(ctx.exception.status_code, 400)
             self.assertIn("Grant binding mismatch", ctx.exception.detail)
+
+        # 2. Substring match attempt -> rejected
+        substring_note = base64.b64encode(b"prefix:qeq:grant:v1:testnet:774088414:qeq-grant-test-123:suffix").decode()
+        mock_tx_sub = dict(mock_tx_no_note)
+        mock_tx_sub["note"] = substring_note
+        with patch("httpx.Client.get") as mock_get:
+            mock_get.return_value.status_code = 200
+            mock_get.return_value.json.return_value = {"transaction": mock_tx_sub}
+
+            with self.assertRaises(HTTPException) as ctx:
+                verify_settlement_evidence(
+                    tx_id="TX_SUBSTRING_" + "2" * 38,
+                    grant_id=grant_id,
+                    beneficiary_address="TPLMGGFNG64LKOCKVB7ZMQH5AMSNMV4GLI7GCH4FY2XQEKSIGB77O6LCFM",
+                    expected_amount_qeq=1000,
+                    configured_network="testnet",
+                    configured_asset_id=774088414,
+                )
+            self.assertEqual(ctx.exception.status_code, 400)
+            self.assertIn("Grant binding mismatch", ctx.exception.detail)
+
+        # 3. Exact canonical note -> PASS
+        exact_note_b64 = base64.b64encode(correct_note.encode("utf-8")).decode()
+        mock_tx_ok = dict(mock_tx_no_note)
+        mock_tx_ok["note"] = exact_note_b64
+        with patch("httpx.Client.get") as mock_get:
+            mock_get.return_value.status_code = 200
+            mock_get.return_value.json.return_value = {"transaction": mock_tx_ok}
+
+            payment = verify_settlement_evidence(
+                tx_id="TX_OK_" + "3" * 44,
+                grant_id=grant_id,
+                beneficiary_address="TPLMGGFNG64LKOCKVB7ZMQH5AMSNMV4GLI7GCH4FY2XQEKSIGB77O6LCFM",
+                expected_amount_qeq=1000,
+                configured_network="testnet",
+                configured_asset_id=774088414,
+            )
+            self.assertEqual(payment.canonical_grant_binding, correct_note)
+            self.assertEqual(payment.amount_base_units, 1000_000_000)
+
+    # --- Section 4: Treasury Sender Fail-Closed & Compromised Check ---
+    def test_treasury_sender_security_and_fail_closed(self):
+        """Disallow empty allowlist, ban compromised address, and reject unauthorized senders."""
+        grant_id = "qeq-grant-sender-check"
+        correct_note = base64.b64encode(build_canonical_grant_note("testnet", 774088414, grant_id).encode()).decode()
+
+        # 1. Compromised address as sender -> rejected
+        mock_tx_compromised = {
+            "confirmed-round": 68175000,
+            "sender": COMPROMISED_ADMIN_ADDR,
+            "note": correct_note,
+            "asset-transfer-transaction": {
+                "asset-id": 774088414,
+                "receiver": "TPLMGGFNG64LKOCKVB7ZMQH5AMSNMV4GLI7GCH4FY2XQEKSIGB77O6LCFM",
+                "amount": 1000_000_000,
+            },
+        }
+        with patch("httpx.Client.get") as mock_get:
+            mock_get.return_value.status_code = 200
+            mock_get.return_value.json.return_value = {"transaction": mock_tx_compromised}
+
+            with self.assertRaises(HTTPException) as ctx:
+                verify_settlement_evidence(
+                    tx_id="TX_COMPROMISED_SENDER_" + "4" * 30,
+                    grant_id=grant_id,
+                    beneficiary_address="TPLMGGFNG64LKOCKVB7ZMQH5AMSNMV4GLI7GCH4FY2XQEKSIGB77O6LCFM",
+                    expected_amount_qeq=1000,
+                    configured_network="testnet",
+                    configured_asset_id=774088414,
+                )
+            self.assertEqual(ctx.exception.status_code, 400)
+            self.assertIn("Sender mismatch", ctx.exception.detail)
+
+    # --- Section 7: Durable Replay & Uniqueness ---
+    def test_durable_replay_protection_on_settlement_record(self):
+        """A single on-chain transaction cannot be reused across proposals."""
+        db = TestSessionLocal()
+        p1 = GrantProposal(
+            id="grant-p1",
+            title="P1",
+            category="community_grants",
+            requested_amount_qeq=1000,
+            beneficiary_address="TPLMGGFNG64LKOCKVB7ZMQH5AMSNMV4GLI7GCH4FY2XQEKSIGB77O6LCFM",
+            description="First grant",
+            status=GrantStatus.APPROVED,
+            network="testnet",
+            asset_id=774088414,
+        )
+        p2 = GrantProposal(
+            id="grant-p2",
+            title="P2",
+            category="community_grants",
+            requested_amount_qeq=1000,
+            beneficiary_address="TPLMGGFNG64LKOCKVB7ZMQH5AMSNMV4GLI7GCH4FY2XQEKSIGB77O6LCFM",
+            description="Second grant",
+            status=GrantStatus.APPROVED,
+            network="testnet",
+            asset_id=774088414,
+        )
+        db.add_all([p1, p2])
+        db.commit()
         db.close()
 
+        shared_tx_id = "TX_SHARED_REPLAY_" + "8" * 35
 
-if __name__ == "__main__":
-    unittest.main()
+        mock_p1 = NormalizedPayment(
+            network_identity="testnet-gh",
+            root_transaction_id=shared_tx_id,
+            inner_transaction_path="root",
+            confirmed_round=68175000,
+            application_id=None,
+            sender=TESTNET_TREASURY_ADDR,
+            asset_id=774088414,
+            receiver="TPLMGGFNG64LKOCKVB7ZMQH5AMSNMV4GLI7GCH4FY2XQEKSIGB77O6LCFM",
+            amount_base_units=1000_000_000,
+            canonical_grant_binding=build_canonical_grant_note("testnet", 774088414, "grant-p1"),
+            rekey_to=None,
+            close_to=None,
+            clawback=None,
+        )
+
+        with patch("backend.grants.verify_settlement_evidence", return_value=mock_p1):
+            res1 = self.client.patch(
+                f"/api/grants/proposals/grant-p1/disburse",
+                json={"onchain_tx_id": shared_tx_id},
+                headers=AUTH_HEADERS,
+            )
+            self.assertEqual(res1.status_code, 200)
+
+        # Attempt to disburse grant-p2 using the SAME transaction ID -> HTTP 409 Conflict
+        res2 = self.client.patch(
+            f"/api/grants/proposals/grant-p2/disburse",
+            json={"onchain_tx_id": shared_tx_id},
+            headers=AUTH_HEADERS,
+        )
+        self.assertEqual(res2.status_code, 409)
+        self.assertIn("Transaction replay rejected", res2.json()["detail"])

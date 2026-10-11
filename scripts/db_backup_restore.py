@@ -48,10 +48,19 @@ def backup_db() -> Path:
     checksum = compute_file_sha256(backup_file)
     meta_file = BACKUP_DIR / f"qmoosa_db_{timestamp}.meta.json"
 
-    db = SessionLocal()
-    proposals_count = db.query(GrantProposal).count()
-    audit_count = db.query(AuditLog).count()
-    db.close()
+    meta_conn = sqlite3.connect(backup_file)
+    m_cursor = meta_conn.cursor()
+    try:
+        m_cursor.execute("SELECT count(*) FROM grant_proposals;")
+        proposals_count = m_cursor.fetchone()[0]
+    except Exception:
+        proposals_count = 0
+    try:
+        m_cursor.execute("SELECT count(*) FROM audit_logs;")
+        audit_count = m_cursor.fetchone()[0]
+    except Exception:
+        audit_count = 0
+    meta_conn.close()
 
     metadata = {
         "timestamp": timestamp,

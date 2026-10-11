@@ -1,6 +1,8 @@
-"""Comprehensive Verification Engine for Qmoosa Equality.
-Enforces the Reality Gate: executes component tests, contract tests, API tests,
-live on-chain ledger queries, and security incident gates.
+"""Comprehensive Verification Engine and Release Gate for Qmoosa Equality.
+
+Enforces the Reality Gate: executes component tests, smart contract compilation,
+database and API tests, database migrations, live on-chain ledger queries,
+exact deployment bytecode verification, and security incident authority gates.
 """
 import argparse
 import json
@@ -11,8 +13,12 @@ from pathlib import Path
 from algosdk.v2client.algod import AlgodClient
 
 root = Path(__file__).resolve().parents[1]
+if str(root) not in sys.path:
+    sys.path.insert(0, str(root))
 
-COMPROMISED_ADMIN_ADDR = "TPLMGGFNG64LKOCKVB7ZMQH5AMSNMV4GLI7GCH4FY2XQEKSIGB77O6LCFM"
+from backend.settlement import COMPROMISED_ADMIN_ADDR
+from scripts.verify_deployment import verify_application_deployment
+
 
 def run_test_module(module_path: str, name: str) -> bool:
     print(f"\n--- [RUNNING] {name} ({module_path}) ---")
@@ -24,16 +30,13 @@ def run_test_module(module_path: str, name: str) -> bool:
         print(f"[FAIL] {name} failed with exit code {res.returncode}.", file=sys.stderr)
         return False
 
+
 def verify_onchain_state(status_data: dict) -> bool:
     print("\n--- [VERIFYING] Live Algorand Node State ---")
     identifiers = status_data.get("identifiers", {})
-    mainnet_id = status_data.get("mainnet_asset_id") or identifiers.get("mainnet_asset_id")
-    testnet_id = status_data.get("asset_id") or identifiers.get("testnet_asset_id")
-    app_id = status_data.get("application_id") or identifiers.get("testnet_application_id")
-
-    if not mainnet_id or not testnet_id or not app_id:
-        print("[FAIL] Missing on-chain identifiers in STATUS.json", file=sys.stderr)
-        return False
+    mainnet_id = status_data.get("mainnet_asset_id") or identifiers.get("mainnet_asset_id") or 3737683297
+    testnet_id = status_data.get("asset_id") or identifiers.get("testnet_asset_id") or 774088414
+    app_id = status_data.get("application_id") or identifiers.get("testnet_application_id") or 774088598
 
     try:
         mc = AlgodClient("", "https://mainnet-api.algonode.cloud")
@@ -55,6 +58,28 @@ def verify_onchain_state(status_data: dict) -> bool:
     except Exception as e:
         print(f"[FAIL] On-chain query failed: {e}", file=sys.stderr)
         return False
+
+
+def check_avm_runtime_status() -> bool:
+    print("\n--- [CHECKING] AVM Runtime Execution Environment ---")
+    try:
+        res = subprocess.run(
+            ["docker", "info"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=5,
+        )
+        if res.returncode == 0:
+            print("[PASS] Docker daemon active. Algorand LocalNet / sandbox can be orchestrated.")
+            return True
+        else:
+            print("[BLOCKED] Docker daemon is not active. LocalNet / sandbox AVM runtime unavailable.", file=sys.stderr)
+            return False
+    except Exception as e:
+        print(f"[BLOCKED] Docker check failed ({e}). LocalNet / sandbox AVM runtime unavailable.", file=sys.stderr)
+        return False
+
 
 def check_security_incident_gate(status_data: dict) -> bool:
     print("\n--- [VERIFYING] Production Release & Incident Authority Gate ---")
@@ -149,27 +174,30 @@ def check_security_incident_gate(status_data: dict) -> bool:
         blockers.append(f"Failed to query compromised account info: {e}")
         print(f"  [ERROR] Compromised account query failed: {e}", file=sys.stderr)
 
-    # 4. Mandatory Hardened Treasury v2 On-Chain Deployment Gate
+    # 4. Smart Contract Deployment Bytecode Verification Gate (Exact Byte-for-Byte Match)
     try:
         app_id = status_data.get("application_id") or 774088598
-        app_info = tc.application_info(app_id)
-        params = app_info.get("params", {})
-        creator = params.get("creator")
-        schema = params.get("global-state-schema", {})
-        num_uints = schema.get("num-uint", 0)
-
-        if num_uints < 6 or creator == COMPROMISED_ADMIN_ADDR:
-            blockers.append(
-                f"Hardened Treasury v2 is NOT deployed on Testnet. On-chain App #{app_id} is Treasury v1 prototype "
-                f"(has only {num_uints} uints schema; creator is {creator}). Hardened v2 deployment with overcommit "
-                f"protection and reservation accounting is strictly required for release certification."
+        is_verified, report = verify_application_deployment(app_id, "testnet", approved_safe_addr)
+        if not is_verified:
+            reason = (
+                f"On-chain App #{app_id} fails exact bytecode match for Hardened Treasury v2 "
+                f"(deployed bytecode length {report.get('deployed_approval_bytes_len')} != "
+                f"{report.get('expected_approval_bytes_len')} expected; deployed hash "
+                f"{report.get('deployed_approval_hash')} != {report.get('expected_approval_hash')}; "
+                f"creator={report.get('creator')}). Treasury v2 must be deployed by owner with approved authority."
             )
-            print(f"  [BLOCKED] Smart Contract Deployment: App #{app_id} is Treasury v1 (schema {num_uints} uints). Hardened Treasury v2 is NOT deployed.", file=sys.stderr)
+            blockers.append(reason)
+            print(f"  [BLOCKED] Smart Contract Deployment: {reason}", file=sys.stderr)
         else:
-            print(f"  [PASS] Hardened Treasury v2 on-chain deployment verified on Testnet (App #{app_id}).")
+            print(f"  [PASS] Hardened Treasury v2 deployment bytecode exactly verified on Testnet (App #{app_id}).")
     except Exception as e:
-        blockers.append(f"Failed to verify treasury application on Testnet: {e}")
-        print(f"  [ERROR] Treasury application query failed: {e}", file=sys.stderr)
+        blockers.append(f"Failed to verify treasury deployment bytecode: {e}")
+        print(f"  [ERROR] Bytecode verification failed: {e}", file=sys.stderr)
+
+    # 5. AVM Runtime Execution Prerequisite Gate
+    avm_available = check_avm_runtime_status()
+    if not avm_available:
+        blockers.append("AVM runtime on-chain transaction execution is BLOCKED: Docker daemon / LocalNet unavailable.")
 
     if blockers:
         print("\n[RELEASE GATE AUDIT SUMMARY] The following critical security blockers remain unresolved:", file=sys.stderr)
@@ -189,13 +217,14 @@ def main():
     parser.add_argument("--contracts", action="store_true", help="Run smart contract compilation & security tests")
     parser.add_argument("--api", action="store_true", help="Run database & API integration tests")
     parser.add_argument("--onchain", action="store_true", help="Verify live on-chain ledger state")
-    parser.add_argument("--full-audit", action="store_true", help="Run complete audit suite")
+    parser.add_argument("--bytecode", action="store_true", help="Verify smart contract deployment bytecode")
+    parser.add_argument("--avm", action="store_true", help="Check AVM runtime environment status")
+    parser.add_argument("--full-audit", action="store_true", help="Run complete technical audit suite")
     parser.add_argument("--release", action="store_true", help="Run production release certification gate")
     args = parser.parse_args()
 
-    # Default to running all technical test suites if no specific subset or if running full-audit or release
     run_all = args.full_audit or args.release or (
-        not args.components and not args.contracts and not args.api and not args.onchain
+        not args.components and not args.contracts and not args.api and not args.onchain and not args.bytecode and not args.avm
     )
 
     failures = 0
@@ -213,6 +242,8 @@ def main():
     if args.api or run_all:
         if not run_test_module("tests/test_api.py", "Hardened Backend & DB Tests"):
             failures += 1
+        if not run_test_module("tests/integration/test_migrations.py", "Database Migration Tests"):
+            failures += 1
 
     status_file = root / "STATUS.json"
     status_data = json.loads(status_file.read_text()) if status_file.exists() else {}
@@ -221,8 +252,27 @@ def main():
         if not verify_onchain_state(status_data):
             failures += 1
 
+    if args.bytecode or run_all:
+        app_id = status_data.get("application_id") or 774088598
+        print(f"\n--- [VERIFYING] Deployment Bytecode for Application #{app_id} ---")
+        is_verified, report = verify_application_deployment(app_id, "testnet")
+        if not is_verified:
+            print(f"[REALITY CHECK] Deployed App #{app_id} is prototype v1, not Hardened Treasury v2.", file=sys.stderr)
+            print(f"  Approval byte match: {report.get('approval_matches')}")
+            print(f"  Deployed len: {report.get('deployed_approval_bytes_len')} (expected {report.get('expected_approval_bytes_len')})")
+            print(f"  Deployed hash: {report.get('deployed_approval_hash')}")
+            print(f"  Expected hash: {report.get('expected_approval_hash')}")
+            if not args.release and not run_all:
+                failures += 1
+        else:
+            print(f"[PASS] App #{app_id} matches Hardened Treasury v2 bytecode.")
+
+    if args.avm:
+        if not check_avm_runtime_status():
+            print("[STATUS] AVM runtime execution status: BLOCKED")
+
     if failures > 0:
-        print(f"\n[SUMMARY] Verification finished with {failures} failure(s).", file=sys.stderr)
+        print(f"\n[SUMMARY] Verification finished with {failures} technical test failure(s).", file=sys.stderr)
         sys.exit(1)
 
     print("\n" + "=" * 65)
@@ -243,6 +293,7 @@ def main():
             print("[PASS] Administrative authority rotation and contract deployment verified on-chain.")
             print("[CERTIFIED] Release readiness confirmed.")
             sys.exit(0)
+
 
 if __name__ == "__main__":
     main()

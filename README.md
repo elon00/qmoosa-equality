@@ -19,7 +19,7 @@ An independent Algorand economic-inclusion platform dedicated to supporting Mool
 
 During initial deployment testing, the 25-word mnemonic phrase for the deploying account (`TPLMGGFNG64LKOCKVB7ZMQH5AMSNMV4GLI7GCH4FY2XQEKSIGB77O6LCFM`) was exposed in conversation context.
 
-- **Release Status**: **MAINNET PRODUCTION RELEASE IS STRICTLY BLOCKED** until administrative manager and reserve authorities are rotated on-chain to an uncompromised address via owner-controlled wallet signing.
+- **Release Status**: **MAINNET PRODUCTION RELEASE IS STRICTLY BLOCKED** until administrative manager and reserve authorities are rotated on-chain to an uncompromised address via owner-controlled wallet signing, and Hardened Treasury v2 is deployed.
 - **Unsigned Migration Tool**: Run `python scripts/rotate_authority_txns.py --network mainnet --new-manager <TARGET_ADDR>` to generate unsigned rotation transactions for offline/hardware wallet signing.
 - **Runbook**: See [`docs/INCIDENT_RESPONSE_KEY_EXPOSURE.md`](docs/INCIDENT_RESPONSE_KEY_EXPOSURE.md).
 
@@ -31,15 +31,18 @@ During initial deployment testing, the 25-word mnemonic phrase for the deploying
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
 | **Algorand Testnet** | Qmoosa Equality | `QEQ` | [`774088414`](https://lora.algokit.io/testnet/asset/774088414) | `68171764` | `GDMORMEM...` | [Lora Testnet Asset](https://lora.algokit.io/testnet/asset/774088414) |
 | **Algorand Mainnet** | Qmoosa Equality | `QEQ` | [`3737683297`](https://lora.algokit.io/mainnet/asset/3737683297) | `65891166` | `U5LVAFLK...` | [Lora Mainnet Asset](https://lora.algokit.io/mainnet/asset/3737683297) |
-| **Testnet Treasury** | Community Escrow | `APP` | [`774088598`](https://lora.algokit.io/testnet/application/774088598) | `68171916` | `X3G65FE2...` | [Lora Treasury App](https://lora.algokit.io/testnet/application/774088598) |
+| **Testnet Treasury** | Community Escrow (Prototype v1) | `APP` | [`774088598`](https://lora.algokit.io/testnet/application/774088598) | `68171916` | `X3G65FE2...` | [Lora Treasury App](https://lora.algokit.io/testnet/application/774088598) |
+
+*Notice: Testnet Application 774088598 is the prototype v1 (407 bytes approval bytecode). Hardened Treasury v2 (842 bytes TEAL 8 with Application Box Storage) is reproducibly compiled and validated via live Algod node compilation, but remains undeployed on-chain.*
 
 ---
 
-## 🛡️ Reality Gate Protocol (Zero Simulation)
+## 🛡️ Reality Gate Protocol
 
 This project strictly operates under the **Reality Gate**:
-- **Zero Simulation / Zero Mock**: Real Algorand blockchain RPC queries and real C-extension execution of NIST FIPS 204 **ML-DSA-65** post-quantum cryptography.
-- **Fail-Closed Conjunction**: If any cryptographic proof, database integrity check, or security requirement is missing, verification halts closed with an explicit error code.
+- **Verified On-Chain State**: Real Algorand blockchain node queries against Mainnet and Testnet nodes, live opcode compilation against Algod `/v2/teal/compile`, and byte-for-byte bytecode deployment audits.
+- **Accurately Labeled Testing**: Off-chain specification state machines and test fixtures are explicitly labeled as specification models, while AVM runtime execution status is tracked truthfully (marked BLOCKED when LocalNet / Docker is unavailable).
+- **Fail-Closed Release Gate**: All technical test suites and deployment gates must pass. If any cryptographic proof, database integrity check, bytecode match, or authority requirement is unverified, release certification halts closed with an explicit error code (code 2 for release blockers).
 
 ---
 
@@ -57,17 +60,18 @@ source .venv/bin/activate
 python -m pip install -r requirements.txt
 ```
 
-### Complete Verification Suite
+### Complete Technical Verification Suite
 ```bash
-python scripts/check.py
+python scripts/check.py --components --contracts --api --onchain
 ```
 
 ### Modular Audit Commands
 - `python scripts/check.py --components`: Runs mathematical allocation and NIST ML-DSA-65 crypto tests.
-- `python scripts/check.py --contracts`: Compiles and tests TEAL 8 smart contract security and anti-drain logic.
-- `python scripts/check.py --api`: Tests SQLite persistent database, Pydantic validations, and API routes.
+- `python scripts/check.py --contracts`: Compiles TEAL 8 smart contract on live Algod node, runs Box Storage specification model, and verifies bytecode reality gap.
+- `python scripts/check.py --api`: Tests streaming request limits, fail-closed auth, canonical note binding, replay prevention, and database migrations.
 - `python scripts/check.py --onchain`: Queries live Algorand Mainnet and Testnet nodes for active ledger proofs.
-- `python scripts/check.py --release`: Evaluates production release readiness (intentionally **FAILS CLOSED** with exit code 2 until Incident IR-2026-001 is resolved).
+- `python scripts/check.py --bytecode`: Exact byte-for-byte bytecode audit of on-chain applications against compiled source.
+- `python scripts/check.py --release`: Evaluates production release readiness (intentionally **FAILS CLOSED** with exit code 2 until Incident IR-2026-001 and Treasury v2 deployment are resolved).
 
 ---
 
@@ -83,9 +87,12 @@ python scripts/check.py
    - Pera Wallet and Defly opt-in generator.
    - Genuine Grant Application Portal connected to persistent SQLite database with audit logging.
 
-3. **Database Backup & Restoration**:
+3. **Database Migrations & Backup**:
    ```bash
-   # Create snapshot with SHA-256 checksum:
+   # Execute migrations with automated pre-audit and backup:
+   python migrations/run_migrations.py
+
+   # Create standalone snapshot with SHA-256 checksum:
    python scripts/db_backup_restore.py backup
 
    # Restore snapshot:
@@ -98,9 +105,4 @@ python scripts/check.py
 
 - [`docs/INCIDENT_RESPONSE_KEY_EXPOSURE.md`](docs/INCIDENT_RESPONSE_KEY_EXPOSURE.md) — Administrative key exposure response runbook.
 - [`docs/OPERATIONAL_READINESS.md`](docs/OPERATIONAL_READINESS.md) — Infrastructure, backup, disaster recovery, and operational status.
-- [`docs/MARKET_READINESS_REPORT.md`](docs/MARKET_READINESS_REPORT.md) — Liquidity, DEX trading, exchange listings, and legal analysis.
-- [`docs/TOKENOMICS_AND_ISSUANCE.md`](docs/TOKENOMICS_AND_ISSUANCE.md) — Fixed ASA supply analysis, integer economics, and runway modeling.
-- [`docs/INTEGRATIONS_ANALYSIS.md`](docs/INTEGRATIONS_ANALYSIS.md) — Technical specifications and limitations (x402, Conway, AI, PQC).
-- [`docs/DESIGN.md`](docs/DESIGN.md) — Original core design document.
-- [`STATUS.json`](STATUS.json) — Structured requirement-to-evidence matrix and blocker registry.
-- [`wiki/`](wiki/) — Full offline documentation suite.
+- [`docs/MARKET_READINESS_ASSESSMENT.md`](docs/MARKET_READINESS_ASSESSMENT.md) — Institutional economic analysis and market readiness assessment.
