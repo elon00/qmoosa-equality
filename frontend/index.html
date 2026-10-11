@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Qmoosa Equality (QEQ) — Algorand Economic Inclusion & Post-Quantum Protocol</title>
+  <title>Qmoosa Equality (QEQ) — Algorand Economic Inclusion Platform</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <style>
@@ -24,11 +24,11 @@
         <div>
           <div class="flex items-center space-x-2">
             <h1 class="font-bold text-xl tracking-tight text-white">Qmoosa Equality</h1>
-            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-              <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 mr-1.5 animate-pulse"></span> Reality Gate Verified
+            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20">
+              <span class="w-1.5 h-1.5 rounded-full bg-amber-400 mr-1.5"></span> Pre-Release / Testnet Validated
             </span>
           </div>
-          <p class="text-xs text-slate-400">Algorand Economic Inclusion & ML-DSA-65 Post-Quantum Protocol</p>
+          <p class="text-xs text-slate-400">Algorand Economic Inclusion & ML-DSA-65 Protocol</p>
         </div>
       </div>
 
@@ -51,53 +51,64 @@
     </div>
   </header>
 
-  <!-- Hero Section -->
-  <main class="flex-grow max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 w-full space-y-10">
+  <!-- Security Alert Banner (Incident Disclosure) -->
+  <div class="bg-amber-950/60 border-b border-amber-800/60 px-4 py-2 text-xs text-amber-200">
+    <div class="max-w-7xl mx-auto flex items-center justify-between">
+      <div class="flex items-center space-x-2">
+        <i class="fas fa-exclamation-triangle text-amber-400"></i>
+        <span><strong>Security Notice:</strong> Mainnet release is currently <strong>BLOCKED</strong> pending administrative authority rotation. Token is not listed on exchanges. No guaranteed financial returns.</span>
+      </div>
+      <a href="https://github.com/elon00/qmoosa-equality/blob/main/docs/INCIDENT_RESPONSE_KEY_EXPOSURE.md" target="_blank" class="underline text-amber-300 hover:text-white font-medium">Read Runbook &rarr;</a>
+    </div>
+  </div>
 
-    <!-- Mission & Live Badges -->
+  <!-- Hero Section -->
+  <main class="flex-grow max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full space-y-10">
+
+    <!-- Mission & Overview -->
     <div class="bg-gradient-to-b from-slate-900/90 to-slate-900/40 border border-slate-800/80 rounded-3xl p-8 shadow-2xl relative overflow-hidden">
       <div class="absolute -right-20 -top-20 w-96 h-96 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none"></div>
       <div class="max-w-3xl space-y-4">
         <div class="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 text-xs font-medium">
-          <i class="fas fa-certificate text-[10px]"></i>
-          <span>Zero Simulation Protocol &bull; 100% Real On-Chain Ledger</span>
+          <i class="fas fa-hand-holding-heart text-[10px]"></i>
+          <span>Independent Economic Inclusion Initiative</span>
         </div>
         <h2 class="text-3xl sm:text-4xl font-extrabold tracking-tight text-white">
-          Economic Inclusion for Moolnivasi, SC, ST, OBC & Underserved Communities
+          Empowering Moolnivasi, SC, ST, OBC & Underserved Communities
         </h2>
         <p class="text-slate-300 text-sm leading-relaxed">
-          Qmoosa Equality is an experimental sovereign utility token and grant coordination engine on Algorand. Designed with strict mathematical integer allocations, anti-dilution ceilings, zero on-chain personal data exposure, and NIST FIPS 204 post-quantum signature verification.
+          Qmoosa Equality is an independent open-source economic-inclusion project on Algorand. Designed to support community grants, social enterprises, livelihoods, and public goods. Token issuance alone does not eliminate poverty or guarantee returns. All actions adhere to strict non-custodial privacy (zero caste/identity tagging on-chain) and off-chain ML-DSA-65 post-quantum manifest verification.
         </p>
       </div>
 
       <!-- Live Network Stats Cards -->
       <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mt-8">
         <div class="bg-slate-950/60 border border-slate-800/80 p-5 rounded-2xl">
-          <span class="text-xs text-slate-400 font-medium">Live On-Chain Asset ID</span>
+          <span class="text-xs text-slate-400 font-medium">Verified On-Chain Asset ID</span>
           <div class="text-2xl font-bold font-mono text-emerald-400 mt-1" id="statAssetId">3737683297</div>
           <span class="text-[11px] text-slate-500" id="statNetworkLabel">Algorand Mainnet</span>
         </div>
         <div class="bg-slate-950/60 border border-slate-800/80 p-5 rounded-2xl">
-          <span class="text-xs text-slate-400 font-medium">Total Supply (Fixed)</span>
+          <span class="text-xs text-slate-400 font-medium">Fixed Total Supply</span>
           <div class="text-2xl font-bold font-mono text-white mt-1">1,000,000 QEQ</div>
-          <span class="text-[11px] text-slate-500">6 Decimals &bull; No Minting Leakage</span>
+          <span class="text-[11px] text-slate-500">6 Decimals &bull; Immutable Total</span>
         </div>
         <div class="bg-slate-950/60 border border-slate-800/80 p-5 rounded-2xl">
-          <span class="text-xs text-slate-400 font-medium">Community Grant Share</span>
+          <span class="text-xs text-slate-400 font-medium">Proposed Community Grant Share</span>
           <div class="text-2xl font-bold font-mono text-cyan-400 mt-1">50.00% (5,000 bps)</div>
-          <span class="text-[11px] text-slate-500">500,000 QEQ Dedicated</span>
+          <span class="text-[11px] text-slate-500">Proposed Governance Policy</span>
         </div>
         <div class="bg-slate-950/60 border border-slate-800/80 p-5 rounded-2xl">
-          <span class="text-xs text-slate-400 font-medium">Quantum Signature Core</span>
+          <span class="text-xs text-slate-400 font-medium">Post-Quantum Signature Core</span>
           <div class="text-2xl font-bold font-mono text-purple-400 mt-1">ML-DSA-65</div>
-          <span class="text-[11px] text-slate-500">NIST FIPS 204 Active</span>
+          <span class="text-[11px] text-slate-500">NIST FIPS 204 Validated Off-Chain</span>
         </div>
       </div>
 
       <div class="flex flex-wrap items-center gap-3 mt-6">
         <a id="btnLoraLink" href="https://lora.algokit.io/mainnet/asset/3737683297" target="_blank" class="px-5 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs flex items-center space-x-2 transition shadow-lg shadow-emerald-500/20">
           <i class="fas fa-external-link-alt"></i>
-          <span>View On Lora Blockchain Explorer</span>
+          <span>View on Lora Blockchain Explorer</span>
         </a>
         <button onclick="copyAssetId()" class="px-5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-semibold text-xs flex items-center space-x-2 transition border border-slate-700">
           <i class="fas fa-copy"></i>
@@ -109,18 +120,17 @@
     <!-- Tokenomics & Allocation Section -->
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
       
-      <!-- Tokenomics Distribution Breakdown -->
+      <!-- Proposed Allocation Model -->
       <div class="lg:col-span-2 bg-slate-900/60 border border-slate-800 rounded-3xl p-6 space-y-6">
         <div class="flex items-center justify-between">
           <div>
-            <h3 class="text-lg font-bold text-white">Integer Allocation Model</h3>
-            <p class="text-xs text-slate-400">Exact conservation law with zero fractional leakage: sum(allocations) == total</p>
+            <h3 class="text-lg font-bold text-white">Proposed Integer Allocation Model</h3>
+            <p class="text-xs text-slate-400">Exact conservation: sum(allocations) == 1,000,000 QEQ</p>
           </div>
           <span class="px-2.5 py-1 rounded bg-slate-800 text-[11px] font-mono text-slate-300">Annual Dilution Cap: 5.00%</span>
         </div>
 
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <!-- Community Grants -->
           <div class="bg-slate-950/70 border border-emerald-500/30 p-4 rounded-2xl space-y-2">
             <div class="flex justify-between items-center text-xs">
               <span class="font-semibold text-emerald-400">1. Community Grants</span>
@@ -129,10 +139,9 @@
             <div class="w-full bg-slate-800 rounded-full h-2">
               <div class="bg-emerald-400 h-2 rounded-full" style="width: 50%"></div>
             </div>
-            <p class="text-[11px] text-slate-400">Direct livelihood, skill-building, and emergency support for Moolnivasi, SC/ST/OBC beneficiaries.</p>
+            <p class="text-[11px] text-slate-400">Direct livelihood, educational support, and basic needs for vulnerable community members.</p>
           </div>
 
-          <!-- Social Enterprises -->
           <div class="bg-slate-950/70 border border-cyan-500/30 p-4 rounded-2xl space-y-2">
             <div class="flex justify-between items-center text-xs">
               <span class="font-semibold text-cyan-400">2. Social Enterprises</span>
@@ -141,10 +150,9 @@
             <div class="w-full bg-slate-800 rounded-full h-2">
               <div class="bg-cyan-400 h-2 rounded-full" style="width: 25%"></div>
             </div>
-            <p class="text-[11px] text-slate-400">Micro-enterprise and cooperative development capital reinvested in community survival.</p>
+            <p class="text-[11px] text-slate-400">Micro-enterprise and cooperative capital with surplus reinvested in community development.</p>
           </div>
 
-          <!-- Public Goods -->
           <div class="bg-slate-950/70 border border-amber-500/30 p-4 rounded-2xl space-y-2">
             <div class="flex justify-between items-center text-xs">
               <span class="font-semibold text-amber-400">3. Public Goods</span>
@@ -153,10 +161,9 @@
             <div class="w-full bg-slate-800 rounded-full h-2">
               <div class="bg-amber-400 h-2 rounded-full" style="width: 15%"></div>
             </div>
-            <p class="text-[11px] text-slate-400">Educational infrastructure, open-access libraries, community tech workshops.</p>
+            <p class="text-[11px] text-slate-400">Open-source community tools, educational materials, and local public infrastructure.</p>
           </div>
 
-          <!-- Operations -->
           <div class="bg-slate-950/70 border border-slate-700 p-4 rounded-2xl space-y-2">
             <div class="flex justify-between items-center text-xs">
               <span class="font-semibold text-slate-300">4. Transparent Operations</span>
@@ -165,16 +172,16 @@
             <div class="w-full bg-slate-800 rounded-full h-2">
               <div class="bg-slate-500 h-2 rounded-full" style="width: 10%"></div>
             </div>
-            <p class="text-[11px] text-slate-400">Technical infrastructure, auditing, legal verification, open-source governance.</p>
+            <p class="text-[11px] text-slate-400">Technical infrastructure, security auditing, legal compliance, and operational governance.</p>
           </div>
         </div>
       </div>
 
-      <!-- Pera Wallet & Defly Opt-In -->
+      <!-- Wallet Opt-In -->
       <div class="bg-slate-900/60 border border-slate-800 rounded-3xl p-6 flex flex-col justify-between space-y-6">
         <div>
-          <h3 class="text-lg font-bold text-white">Wallet Opt-In Portal</h3>
-          <p class="text-xs text-slate-400 mt-1">To receive or hold QEQ, your Algorand wallet must opt-in to the Asset ID.</p>
+          <h3 class="text-lg font-bold text-white">Wallet Opt-In Reference</h3>
+          <p class="text-xs text-slate-400 mt-1">To hold QEQ, your Algorand wallet must opt-in to the Asset ID.</p>
         </div>
 
         <div class="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-3 font-mono text-xs">
@@ -191,60 +198,89 @@
             <i class="fas fa-wallet"></i>
             <span>Opt-In via Pera Wallet</span>
           </a>
-          <p class="text-[10px] text-slate-500 text-center">Requires 0.1 ALGO minimum balance requirement (MBR) per standard Algorand consensus.</p>
+          <p class="text-[10px] text-slate-500 text-center">Standard Algorand consensus requires 0.1 ALGO Minimum Balance Requirement (MBR).</p>
         </div>
       </div>
 
     </div>
 
-    <!-- Community Grant Applications Portal -->
+    <!-- Genuine Grant Proposals Registry -->
     <div class="bg-slate-900/60 border border-slate-800 rounded-3xl p-6 space-y-6">
       <div class="flex items-center justify-between">
         <div>
-          <h3 class="text-lg font-bold text-white">Community Grants & Social Enterprise Registry</h3>
-          <p class="text-xs text-slate-400">Disbursed via the on-chain Escrow Smart Contract (<span class="font-mono text-emerald-400">App ID: 774088598</span>)</p>
+          <h3 class="text-lg font-bold text-white">Live Community Grant Registry</h3>
+          <p class="text-xs text-slate-400">All submissions are persisted in the relational database with full audit trail history.</p>
         </div>
-        <button onclick="openGrantModal()" class="px-4 py-2 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 text-xs font-semibold border border-emerald-500/30 transition">
+        <button onclick="toggleModal(true)" class="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold transition shadow-lg shadow-emerald-500/10">
           + Submit Grant Application
         </button>
       </div>
 
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-4" id="grantList">
-        <!-- Rendered by app.js -->
-        <div class="bg-slate-950/70 border border-slate-800 p-5 rounded-2xl space-y-3">
-          <div class="flex justify-between items-start">
-            <h4 class="font-semibold text-white text-sm">Moolnivasi Youth Coding & Quantum Literacy Program</h4>
-            <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">APPROVED</span>
-          </div>
-          <p class="text-xs text-slate-400">Providing post-quantum and web3 engineering literacy to underprivileged rural youth.</p>
-          <div class="flex justify-between items-center text-[11px] font-mono text-slate-500 pt-2 border-t border-slate-800/80">
-            <span>Category: Community Grants</span>
-            <span class="text-emerald-400 font-bold">50,000 QEQ</span>
-          </div>
-        </div>
-
-        <div class="bg-slate-950/70 border border-slate-800 p-5 rounded-2xl space-y-3">
-          <div class="flex justify-between items-start">
-            <h4 class="font-semibold text-white text-sm">SC/ST Micro-Weaver Cooperative Solar Loom Setup</h4>
-            <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-400 border border-amber-500/30">UNDER REVIEW</span>
-          </div>
-          <p class="text-xs text-slate-400">Sustainable solar-powered looms for artisanal handloom cooperatives.</p>
-          <div class="flex justify-between items-center text-[11px] font-mono text-slate-500 pt-2 border-t border-slate-800/80">
-            <span>Category: Social Enterprises</span>
-            <span class="text-cyan-400 font-bold">25,000 QEQ</span>
-          </div>
+      <!-- Dynamic Grant Container -->
+      <div id="grantContainer" class="space-y-3">
+        <div class="text-center py-10 text-slate-500 text-sm">
+          <i class="fas fa-spinner fa-spin mr-2"></i> Loading genuine grant submissions from database...
         </div>
       </div>
     </div>
 
   </main>
 
+  <!-- Submit Grant Application Modal -->
+  <div id="grantModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-3xl max-w-lg w-full p-6 space-y-5 shadow-2xl">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-4">
+        <h3 class="text-lg font-bold text-white">Submit Community Grant Application</h3>
+        <button onclick="toggleModal(false)" class="text-slate-400 hover:text-white">&times;</button>
+      </div>
+
+      <form id="grantForm" onsubmit="handleGrantSubmit(event)" class="space-y-4 text-xs">
+        <div>
+          <label class="block text-slate-300 font-medium mb-1">Proposal Title</label>
+          <input type="text" id="formTitle" required minlength="5" maxlength="255" placeholder="e.g. Community Handloom Vocational Workshop" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-emerald-500">
+        </div>
+
+        <div>
+          <label class="block text-slate-300 font-medium mb-1">Category</label>
+          <select id="formCategory" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-emerald-500">
+            <option value="community_grants">Community Grants (Livelihood & Skills)</option>
+            <option value="social_enterprises">Social Enterprises (Cooperative Capital)</option>
+            <option value="public_goods">Public Goods (Open Education & Infrastructure)</option>
+            <option value="operations">Operations & Auditing</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-slate-300 font-medium mb-1">Requested Amount (QEQ)</label>
+          <input type="number" id="formAmount" required min="1" max="50000" placeholder="e.g. 5000" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-emerald-500">
+        </div>
+
+        <div>
+          <label class="block text-slate-300 font-medium mb-1">Beneficiary Algorand Public Address (58 chars)</label>
+          <input type="text" id="formAddress" required minlength="58" maxlength="58" placeholder="e.g. TPLMGGFNG64LKOCKVB7ZMQH5AMSNMV4GLI7GCH4FY2XQEKSIGB77O6LCFM" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 font-mono text-white focus:outline-none focus:border-emerald-500">
+        </div>
+
+        <div>
+          <label class="block text-slate-300 font-medium mb-1">Detailed Description (Min 20 characters)</label>
+          <textarea id="formDescription" required minlength="20" maxlength="5000" rows="3" placeholder="Describe the community need, planned outcomes, and beneficiary impact..." class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-emerald-500"></textarea>
+        </div>
+
+        <div id="formFeedback" class="text-xs hidden"></div>
+
+        <div class="flex items-center justify-end space-x-3 pt-3 border-t border-slate-800">
+          <button type="button" onclick="toggleModal(false)" class="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 hover:text-white">Cancel</button>
+          <button type="submit" id="btnSubmitGrant" class="px-5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold">Submit to Registry</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <!-- Footer -->
   <footer class="border-t border-slate-800/80 bg-slate-900/60 py-8 mt-12 text-xs text-slate-400">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row items-center justify-between gap-4">
       <div class="space-y-1 text-center md:text-left">
         <div class="font-bold text-white">Qmoosa Equality Protocol</div>
-        <div>An independent, non-custodial economic-inclusion project. Zero simulation policy.</div>
+        <div>Independent economic inclusion initiative. No affiliation with Muhammad Yunus or external entities.</div>
       </div>
       <div class="flex items-center space-x-6">
         <a href="https://github.com/elon00/qmoosa-equality" class="hover:text-emerald-400 transition">GitHub</a>
@@ -300,9 +336,120 @@
       });
     }
 
-    function openGrantModal() {
-      alert("Beneficiary Grant Portal: Proposals can be submitted via the production API endpoint POST /api/grants/proposals.");
+    function toggleModal(open) {
+      const modal = document.getElementById('grantModal');
+      modal.className = open ? modal.className.replace('hidden', '') : modal.className + ' hidden';
+      document.getElementById('formFeedback').className = 'text-xs hidden';
     }
+
+    async function loadGrants() {
+      const container = document.getElementById('grantContainer');
+      try {
+        const res = await fetch('/api/grants/proposals');
+        if (!res.ok) throw new Error('API query failed');
+        const data = await res.json();
+        const proposals = data.proposals || [];
+
+        if (proposals.length === 0) {
+          container.innerHTML = `
+            <div class="text-center py-12 border border-dashed border-slate-800 rounded-2xl p-6">
+              <i class="fas fa-folder-open text-3xl text-slate-600 mb-3"></i>
+              <h4 class="text-white font-semibold text-sm">No Grant Proposals Submitted Yet</h4>
+              <p class="text-slate-400 text-xs mt-1 max-w-sm mx-auto">
+                All submissions will be recorded in the live database with full audit trail history. Submit the first proposal using the button above.
+              </p>
+            </div>
+          `;
+          return;
+        }
+
+        container.innerHTML = proposals.map(p => `
+          <div class="bg-slate-950/70 border border-slate-800 p-5 rounded-2xl space-y-2">
+            <div class="flex justify-between items-start">
+              <div>
+                <h4 class="font-semibold text-white text-sm">${escapeHtml(p.title)}</h4>
+                <div class="text-[11px] font-mono text-slate-500 mt-0.5">ID: ${p.id} &bull; Beneficiary: ${p.beneficiary_address.slice(0, 8)}...${p.beneficiary_address.slice(-6)}</div>
+              </div>
+              <span class="px-2 py-0.5 rounded text-[10px] font-bold ${getStatusClass(p.status)}">${p.status}</span>
+            </div>
+            <p class="text-xs text-slate-300 leading-relaxed">${escapeHtml(p.description)}</p>
+            <div class="flex justify-between items-center text-[11px] font-mono text-slate-500 pt-2 border-t border-slate-800/80">
+              <span>Category: ${p.category}</span>
+              <span class="text-emerald-400 font-bold">${p.requested_amount_qeq.toLocaleString()} QEQ</span>
+            </div>
+          </div>
+        `).join('');
+
+      } catch (e) {
+        container.innerHTML = `
+          <div class="text-center py-8 text-amber-400 text-xs">
+            <i class="fas fa-exclamation-triangle mr-1"></i> Unable to connect to backend registry (${e.message}). Ensure API server is running on port 8000.
+          </div>
+        `;
+      }
+    }
+
+    async function handleGrantSubmit(event) {
+      event.preventDefault();
+      const feedback = document.getElementById('formFeedback');
+      const btn = document.getElementById('btnSubmitGrant');
+      btn.disabled = true;
+      btn.textContent = 'Submitting...';
+
+      const payload = {
+        title: document.getElementById('formTitle').value.trim(),
+        category: document.getElementById('formCategory').value,
+        requested_amount_qeq: parseInt(document.getElementById('formAmount').value),
+        beneficiary_address: document.getElementById('formAddress').value.trim(),
+        description: document.getElementById('formDescription').value.trim()
+      };
+
+      try {
+        const res = await fetch('/api/grants/proposals', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.detail ? (typeof data.detail === 'string' ? data.detail : JSON.stringify(data.detail)) : 'Submission failed');
+        }
+
+        feedback.className = 'text-xs text-emerald-400 block';
+        feedback.textContent = 'Application registered successfully! Assigned ID: ' + data.proposal.id;
+        document.getElementById('grantForm').reset();
+        setTimeout(() => {
+          toggleModal(false);
+          loadGrants();
+        }, 1500);
+
+      } catch (err) {
+        feedback.className = 'text-xs text-rose-400 block';
+        feedback.textContent = 'Error: ' + err.message;
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Submit to Registry';
+      }
+    }
+
+    function getStatusClass(status) {
+      switch(status) {
+        case 'APPROVED': return 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30';
+        case 'DISBURSED': return 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30';
+        case 'REJECTED': return 'bg-rose-500/20 text-rose-400 border border-rose-500/30';
+        case 'UNDER_REVIEW': return 'bg-amber-500/20 text-amber-400 border border-amber-500/30';
+        default: return 'bg-slate-800 text-slate-300 border border-slate-700';
+      }
+    }
+
+    function escapeHtml(str) {
+      return str.replace(/[&<>'"]/g, tag => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'
+      }[tag] || tag));
+    }
+
+    window.addEventListener('DOMContentLoaded', loadGrants);
   </script>
 </body>
 </html>

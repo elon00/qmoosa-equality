@@ -1,36 +1,45 @@
-# Qmoosa Equality
+# Qmoosa Equality (QEQ)
 
-An experimental Algorand economic-inclusion project for Moolnivasi, SC, ST,
-OBC, minorities, and underserved communities worldwide. An independent initiative
-for economic inclusion; token issuance alone does not eliminate poverty.
+An independent Algorand economic-inclusion platform dedicated to supporting Moolnivasi, SC, ST, OBC, minorities, and underserved communities worldwide through transparent grants, livelihoods, social enterprises, and public goods.
 
-**Repository**: `elon00/qmoosa-equality` | **Ticker**: `QEQ` | **Standard**: Algorand Standard Asset (ASA)
+**Repository**: `elon00/qmoosa-equality` | **Ticker**: `QEQ` | **Standard**: Algorand Standard Asset (ASA)  
+**Mainnet Asset ID**: `3737683297` | **Testnet Asset ID**: `774088414` | **Treasury App ID**: `774088598`
+
+---
+
+## ⚖️ Legal & Independence Disclosures
+
+- **Independent Project Notice**: Qmoosa Equality is an independent open-source project. It is **not** affiliated with, based on, sponsored by, or endorsed by Muhammad Yunus or any of his associated organizations.
+- **No Financial Guarantees**: Token issuance alone does not eliminate poverty, ensure economic security, or generate wealth. QEQ does not offer, promise, or guarantee financial returns, yield, dividend payouts, or income.
+- **Pre-Market Status**: QEQ is currently **unlisted** and has **zero secondary market liquidity**. It cannot be redeemed for fiat currency.
+
+---
+
+## 🚨 Security Incident Disclosure (IR-2026-001)
+
+During initial deployment testing, the 25-word mnemonic phrase for the deploying account (`TPLMGGFNG64LKOCKVB7ZMQH5AMSNMV4GLI7GCH4FY2XQEKSIGB77O6LCFM`) was exposed in conversation context.
+
+- **Release Status**: **MAINNET PRODUCTION RELEASE IS STRICTLY BLOCKED** until administrative manager and reserve authorities are rotated on-chain to an uncompromised address via owner-controlled wallet signing.
+- **Unsigned Migration Tool**: Run `python scripts/rotate_authority_txns.py --network mainnet --new-manager <TARGET_ADDR>` to generate unsigned rotation transactions for offline/hardware wallet signing.
+- **Runbook**: See [`docs/INCIDENT_RESPONSE_KEY_EXPOSURE.md`](docs/INCIDENT_RESPONSE_KEY_EXPOSURE.md).
+
+---
+
+## 🌐 Verified On-Chain Deployments
+
+| Network | Asset Name | Ticker | Asset ID | Confirmed Round | Transaction Hash | Explorer Link |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **Algorand Testnet** | Qmoosa Equality | `QEQ` | [`774088414`](https://lora.algokit.io/testnet/asset/774088414) | `68171764` | `GDMORMEM...` | [Lora Testnet Asset](https://lora.algokit.io/testnet/asset/774088414) |
+| **Algorand Mainnet** | Qmoosa Equality | `QEQ` | [`3737683297`](https://lora.algokit.io/mainnet/asset/3737683297) | `65891166` | `U5LVAFLK...` | [Lora Mainnet Asset](https://lora.algokit.io/mainnet/asset/3737683297) |
+| **Testnet Treasury** | Community Escrow | `APP` | [`774088598`](https://lora.algokit.io/testnet/application/774088598) | `68171916` | `X3G65FE2...` | [Lora Treasury App](https://lora.algokit.io/testnet/application/774088598) |
 
 ---
 
 ## 🛡️ Reality Gate Protocol (Zero Simulation)
 
 This project strictly operates under the **Reality Gate**:
-- **Zero Simulation / Zero Mock**: No synthetic RPC data, mock responses, or fake deployment claims are ever used.
-- **Fail-Closed Conjunction**: If any cryptographic proof, funded on-chain balance, or security audit requirement is missing, execution halts closed with an explicit error code.
-- **Post-Quantum Cryptography**: Real C-extension execution of NIST FIPS 204 **ML-DSA-65** for domain-separated manifest signing and tamper verification.
-
-Detailed specifications can be found in the **[Official Wiki](wiki/Home.md)**:
-- [Reality Gate Specification](wiki/Reality-Gate.md)
-- [Algorand Testnet Deployment](wiki/Algorand-Testnet-Deployment.md)
-- [Algorand Mainnet Deployment](wiki/Algorand-Mainnet-Deployment.md)
-- [Post-Quantum Cryptography](wiki/Post-Quantum-Cryptography.md)
-- [Tokenomics & Social Inclusion](wiki/Tokenomics-and-Inclusion.md)
-
----
-
-## 🌐 Live On-Chain Deployments (Verified Reality Gate Evidence)
-
-| Network | Asset Name | Ticker | Asset ID | Confirmed Round | Transaction ID | Explorer Link |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **Algorand Testnet** | Qmoosa Equality | `QEQ` | [`774088414`](https://lora.algokit.io/testnet/asset/774088414) | `68171764` | `GDMORMEM...` | [View on Lora Testnet](https://lora.algokit.io/testnet/asset/774088414) |
-| **Algorand Mainnet** | Qmoosa Equality | `QEQ` | [`3737683297`](https://lora.algokit.io/mainnet/asset/3737683297) | `65891166` | `U5LVAFLK...` | [View on Lora Mainnet](https://lora.algokit.io/mainnet/asset/3737683297) |
-| **Testnet Treasury Escrow** | Treasury Contract | `APP` | [`774088598`](https://lora.algokit.io/testnet/application/774088598) | `68171916` | `X3G65FE2...` | [View Application](https://lora.algokit.io/testnet/application/774088598) |
+- **Zero Simulation / Zero Mock**: Real Algorand blockchain RPC queries and real C-extension execution of NIST FIPS 204 **ML-DSA-65** post-quantum cryptography.
+- **Fail-Closed Conjunction**: If any cryptographic proof, database integrity check, or security requirement is missing, verification halts closed with an explicit error code.
 
 ---
 
@@ -46,68 +55,52 @@ source .venv/bin/activate
 .\.venv\Scripts\activate
 
 python -m pip install -r requirements.txt
+```
+
+### Complete Verification Suite
+```bash
 python scripts/check.py
 ```
 
-`python scripts/check.py --release` intentionally exits `2` while release is blocked, preventing false claims of production readiness. Passing component tests does not mean a deployment or financial system is safe.
+### Modular Audit Commands
+- `python scripts/check.py --components`: Runs mathematical allocation and NIST ML-DSA-65 crypto tests.
+- `python scripts/check.py --contracts`: Compiles and tests TEAL 8 smart contract security and anti-drain logic.
+- `python scripts/check.py --api`: Tests SQLite persistent database, Pydantic validations, and API routes.
+- `python scripts/check.py --onchain`: Queries live Algorand Mainnet and Testnet nodes for active ledger proofs.
+- `python scripts/check.py --release`: Evaluates production release readiness (intentionally **FAILS CLOSED** with exit code 2 until Incident IR-2026-001 is resolved).
 
 ---
 
-## 🌐 Algorand Blockchain Deployment
+## 🚀 Running the Production Backend & dApp
 
-### 1. Testnet Deployment (Stage 1 Gate)
+1. **Launch the Hardened API Server**:
+   ```bash
+   uvicorn backend.main:app --host 0.0.0.0 --port 8000
+   ```
+2. **Access the dApp Frontend**:
+   Open `http://localhost:8000` in any web browser.
+   - Live Mainnet / Testnet data switcher.
+   - Pera Wallet and Defly opt-in generator.
+   - Genuine Grant Application Portal connected to persistent SQLite database with audit logging.
 
-The deployment script interacts with real Algorand Testnet nodes (`https://testnet-api.algonode.cloud`):
+3. **Database Backup & Restoration**:
+   ```bash
+   # Create snapshot with SHA-256 checksum:
+   python scripts/db_backup_restore.py backup
 
-```powershell
-python scripts/deploy_testnet.py --mnemonic "YOUR_25_WORD_MNEMONIC"
-```
-
-> **Reality Gate Check**:
-> The deploying account must have at least **0.2 ALGO** on Testnet. If the account balance is `0.0 ALGO`, the script refuses to simulate deployment and outputs the official dispenser link:
-> **Fund free Testnet ALGO**: [https://lora.algokit.io/testnet/fund](https://lora.algokit.io/testnet/fund)
-
-### 2. Mainnet Deployment (Stage 3 Gate)
-
-Deploying to Mainnet permanently creates an immutable ASA on the public Algorand blockchain and consumes real ALGO for the Minimum Balance Requirement (MBR) and network fees:
-
-```powershell
-python scripts/deploy_mainnet.py --mnemonic "YOUR_25_WORD_MNEMONIC" --confirm-mainnet
-```
-
-> **Mainnet Safeguards**:
-> - Requires explicit `--confirm-mainnet` flag.
-> - Verifies live genesis `mainnet-v1.0` and queries live Mainnet balance.
-> - Fixed supply of 1,000,000 QEQ (1,000,000,000,000 base units at 6 decimals).
-> - Freeze and Clawback addresses are permanently set to `None` to guarantee non-custodial and censorship-resistant transfers.
+   # Restore snapshot:
+   python scripts/db_backup_restore.py restore data/backups/qmoosa_db_<TIMESTAMP>.sqlite
+   ```
 
 ---
 
-## 🔍 What Exists Today
+## 📚 Technical Documentation Index
 
-- **Integer allocation and funded issuance-budget calculations**: Strict integer math with remainder allocation to community grants ($sum \equiv n$).
-- **Real off-chain ML-DSA-65 signature adapter**: Implemented with `pqcrypto` and verified against document tampering.
-- **HTTPS adapters**: Secure client for OpenAI-compatible chat providers and x402 discovery.
-- **Algorand Testnet & Mainnet deployment scripts**: Real on-chain ASA creation scripts using official Algorand SDK.
-- **Fail-closed CI/CD verification**: GitHub Actions workflows validating component tests and release blockers.
-- **Complete Reality Gate Wiki documentation**: Comprehensive architectural guides in `wiki/`.
-
----
-
-## ⚠️ What Does Not Exist Yet
-
-Grant/treasury smart contracts (TEAL/PyTeal), unlimited issuance contract, end-user frontend,
-multi-chain wallet signing, Conway runtime integration, x402 settlement,
-production chatbot routing, independent security audit and live deployments.
-See [`STATUS.json`](STATUS.json). No fake RPC responses, asset IDs or success manifests are supplied.
-
----
-
-## 🔐 Security Boundaries
-
-- Never paste wallet seeds into chat or commit them to git.
-- Application signatures do not replace Algorand transaction signatures or make the blockchain itself PQ-safe.
-- AI must never receive custody or autonomously approve beneficiaries or funds.
-- Standard ASA supply is fixed at creation; an unlimited-supply model requires custom smart contract architecture.
-
-See [`docs/DESIGN.md`](docs/DESIGN.md) for full tokenomics and implementation specifications.
+- [`docs/INCIDENT_RESPONSE_KEY_EXPOSURE.md`](docs/INCIDENT_RESPONSE_KEY_EXPOSURE.md) — Administrative key exposure response runbook.
+- [`docs/OPERATIONAL_READINESS.md`](docs/OPERATIONAL_READINESS.md) — Infrastructure, backup, disaster recovery, and operational status.
+- [`docs/MARKET_READINESS_REPORT.md`](docs/MARKET_READINESS_REPORT.md) — Liquidity, DEX trading, exchange listings, and legal analysis.
+- [`docs/TOKENOMICS_AND_ISSUANCE.md`](docs/TOKENOMICS_AND_ISSUANCE.md) — Fixed ASA supply analysis, integer economics, and runway modeling.
+- [`docs/INTEGRATIONS_ANALYSIS.md`](docs/INTEGRATIONS_ANALYSIS.md) — Technical specifications and limitations (x402, Conway, AI, PQC).
+- [`docs/DESIGN.md`](docs/DESIGN.md) — Original core design document.
+- [`STATUS.json`](STATUS.json) — Structured requirement-to-evidence matrix and blocker registry.
+- [`wiki/`](wiki/) — Full offline documentation suite.

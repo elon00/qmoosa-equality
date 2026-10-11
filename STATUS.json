@@ -1,19 +1,32 @@
 {
-  "stage": "mainnet-deployed",
+  "stage": "mainnet-deployed-pre-market",
   "deployed": true,
   "asset_id": 774088414,
   "application_id": 774088598,
-  "application_address": "A2SUZAVEYRGQNXG7PMJP3W3JZHA7F24PRUTGHOQ4Q6AEWC574VR7S5OZEE",
-  "blockers": [
-    "Unlimited supply cannot be represented by a standard Algorand ASA",
-    "Algorand x402 settlement and facilitator conformance not implemented",
-    "Conway Automaton integration not implemented",
-    "Multi-chain signing wallets and frontend not implemented",
-    "AI providers require credentials and live verification",
-    "PQC is off-chain only; on-chain enforcement and independent audit are missing",
-    "No independent audit or public testnet acceptance evidence",
-    "No funded authorized deployer or mainnet transaction evidence"
-  ],
   "mainnet_asset_id": 3737683297,
-  "mainnet_tx_id": "U5LVAFLK462ARKMWPDFZVX5MN24534CDZZ5AXDFHXWGF3R4O2FSA"
+  "mainnet_tx_id": "U5LVAFLK462ARKMWPDFZVX5MN24534CDZZ5AXDFHXWGF3R4O2FSA",
+  "release_blocked": true,
+  "market_ready": false,
+  "security_incident": {
+    "id": "IR-2026-001",
+    "status": "ACTIVE_MITIGATION",
+    "compromised_address": "TPLMGGFNG64LKOCKVB7ZMQH5AMSNMV4GLI7GCH4FY2XQEKSIGB77O6LCFM",
+    "mitigation": "Requires owner-controlled wallet signing to rotate manager and reserve on-chain"
+  },
+  "identifiers": {
+    "mainnet_asset_id": 3737683297,
+    "mainnet_tx_id": "U5LVAFLK462ARKMWPDFZVX5MN24534CDZZ5AXDFHXWGF3R4O2FSA",
+    "testnet_asset_id": 774088414,
+    "testnet_tx_id": "GDMORMEM7HLDYVLOMI6T4ZWBEBQXP42TJ6LHTXWEWHQSW4JJVD2Q",
+    "testnet_application_id": 774088598,
+    "testnet_application_address": "A2SUZAVEYRGQNXG7PMJP3W3JZHA7F24PRUTGHOQ4Q6AEWC574VR7S5OZEE"
+  },
+  "blockers": [
+    "Incident IR-2026-001: Mainnet ASA manager authority must be rotated away from compromised address TPLMGGFN...",
+    "Independent professional security audit of PyTeal treasury contracts not yet commissioned",
+    "Algorand x402 settlement facilitator conformance not supported upstream",
+    "No secondary market liquidity or live DEX trading pool established (Market Status: Pre-Liquidity)",
+    "Jurisdiction-specific legal opinion on utility token classification pending",
+    "Non-governmental field partner verification network for off-chain grant review not yet established"
+  ]
 }
