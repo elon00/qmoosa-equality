@@ -1,7 +1,7 @@
 {
-  "stage": "experimental-source-only",
-  "deployed": false,
-  "asset_id": null,
+  "stage": "testnet-deployed",
+  "deployed": true,
+  "asset_id": 774088414,
   "application_id": null,
   "blockers": [
     "No on-chain grant treasury, governance, or issuance contract implemented",
