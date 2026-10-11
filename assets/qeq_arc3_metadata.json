@@ -1,0 +1,29 @@
+{
+  "name": "Qmoosa Equality",
+  "symbol": "QEQ",
+  "unitName": "QEQ",
+  "decimals": 6,
+  "description": "Algorand economic-inclusion asset for Moolnivasi, SC, ST, OBC, minorities, and underserved communities with off-chain ML-DSA-65 post-quantum verification.",
+  "image": "https://raw.githubusercontent.com/elon00/qmoosa-equality/main/assets/qeq_logo.png",
+  "image_mimetype": "image/png",
+  "external_url": "https://github.com/elon00/qmoosa-equality",
+  "properties": {
+    "standard": "ARC-0003",
+    "totalSupply": 1000000000000,
+    "circulatingSupply": 1000000000000,
+    "allocations": {
+      "community_grants_bps": 5000,
+      "social_enterprises_bps": 2500,
+      "public_goods_bps": 1500,
+      "operations_bps": 1000
+    },
+    "dilution_ceiling_annual_bps": 500,
+    "cryptography": "NIST_FIPS_204_ML_DSA_65",
+    "mainnet_asset_id": 3737683297,
+    "testnet_asset_id": 774088414,
+    "manager_address": "TPLMGGFNG64LKOCKVB7ZMQH5AMSNMV4GLI7GCH4FY2XQEKSIGB77O6LCFM",
+    "reserve_address": "TPLMGGFNG64LKOCKVB7ZMQH5AMSNMV4GLI7GCH4FY2XQEKSIGB77O6LCFM",
+    "freeze_address": null,
+    "clawback_address": null
+  }
+}

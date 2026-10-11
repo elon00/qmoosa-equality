@@ -30,6 +30,7 @@ Detailed specifications can be found in the **[Official Wiki](wiki/Home.md)**:
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
 | **Algorand Testnet** | Qmoosa Equality | `QEQ` | [`774088414`](https://lora.algokit.io/testnet/asset/774088414) | `68171764` | `GDMORMEM...` | [View on Lora Testnet](https://lora.algokit.io/testnet/asset/774088414) |
 | **Algorand Mainnet** | Qmoosa Equality | `QEQ` | [`3737683297`](https://lora.algokit.io/mainnet/asset/3737683297) | `65891166` | `U5LVAFLK...` | [View on Lora Mainnet](https://lora.algokit.io/mainnet/asset/3737683297) |
+| **Testnet Treasury Escrow** | Treasury Contract | `APP` | [`774088598`](https://lora.algokit.io/testnet/application/774088598) | `68171916` | `X3G65FE2...` | [View Application](https://lora.algokit.io/testnet/application/774088598) |
 
 ---
 

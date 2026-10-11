@@ -1,0 +1,202 @@
+#pragma version 8
+txn ApplicationID
+int 0
+==
+bnz main_l23
+txn OnCompletion
+int OptIn
+==
+bnz main_l22
+txn OnCompletion
+int CloseOut
+==
+bnz main_l21
+txn OnCompletion
+int UpdateApplication
+==
+bnz main_l20
+txn OnCompletion
+int DeleteApplication
+==
+bnz main_l19
+txn OnCompletion
+int NoOp
+==
+bnz main_l7
+err
+main_l7:
+txna ApplicationArgs 0
+byte "optin_asset"
+==
+bnz main_l18
+txna ApplicationArgs 0
+byte "propose_grant"
+==
+bnz main_l17
+txna ApplicationArgs 0
+byte "claim_grant"
+==
+bnz main_l16
+txna ApplicationArgs 0
+byte "toggle_pause"
+==
+bnz main_l12
+err
+main_l12:
+txn Sender
+byte "admin"
+app_global_get
+==
+assert
+byte "paused"
+byte "paused"
+app_global_get
+int 0
+==
+bnz main_l15
+int 0
+main_l14:
+app_global_put
+int 1
+return
+main_l15:
+int 1
+b main_l14
+main_l16:
+byte "paused"
+app_global_get
+int 0
+==
+assert
+int 0
+byte "pending_grant"
+app_local_get
+int 0
+>
+assert
+global Round
+int 0
+byte "grant_unlock_round"
+app_local_get
+>=
+assert
+itxn_begin
+int axfer
+itxn_field TypeEnum
+byte "asset_id"
+app_global_get
+itxn_field XferAsset
+txn Sender
+itxn_field AssetReceiver
+int 0
+byte "pending_grant"
+app_local_get
+itxn_field AssetAmount
+itxn_submit
+byte "total_disbursed"
+byte "total_disbursed"
+app_global_get
+int 0
+byte "pending_grant"
+app_local_get
++
+app_global_put
+int 0
+byte "pending_grant"
+int 0
+app_local_put
+int 1
+return
+main_l17:
+txn Sender
+byte "admin"
+app_global_get
+==
+assert
+byte "paused"
+app_global_get
+int 0
+==
+assert
+txn NumAppArgs
+int 3
+==
+assert
+int 1
+byte "pending_grant"
+txna ApplicationArgs 2
+btoi
+app_local_put
+int 1
+byte "grant_unlock_round"
+global Round
+byte "dispute_period"
+app_global_get
++
+app_local_put
+int 1
+return
+main_l18:
+txn Sender
+byte "admin"
+app_global_get
+==
+assert
+itxn_begin
+int axfer
+itxn_field TypeEnum
+byte "asset_id"
+app_global_get
+itxn_field XferAsset
+global CurrentApplicationAddress
+itxn_field AssetReceiver
+int 0
+itxn_field AssetAmount
+itxn_submit
+int 1
+return
+main_l19:
+txn Sender
+byte "admin"
+app_global_get
+==
+return
+main_l20:
+txn Sender
+byte "admin"
+app_global_get
+==
+return
+main_l21:
+int 1
+return
+main_l22:
+int 0
+byte "pending_grant"
+int 0
+app_local_put
+int 0
+byte "grant_unlock_round"
+int 0
+app_local_put
+int 1
+return
+main_l23:
+byte "admin"
+txn Sender
+app_global_put
+byte "asset_id"
+txna ApplicationArgs 0
+btoi
+app_global_put
+byte "total_disbursed"
+int 0
+app_global_put
+byte "dispute_period"
+int 100
+app_global_put
+byte "paused"
+int 0
+app_global_put
+int 1
+return
