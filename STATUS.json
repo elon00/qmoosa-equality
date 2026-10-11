@@ -1,5 +1,5 @@
 {
-  "stage": "mainnet-deployed-pre-market",
+  "stage": "hardening-in-progress-release-blocked",
   "deployed": true,
   "asset_id": 774088414,
   "application_id": 774088598,
@@ -7,11 +7,51 @@
   "mainnet_tx_id": "U5LVAFLK462ARKMWPDFZVX5MN24534CDZZ5AXDFHXWGF3R4O2FSA",
   "release_blocked": true,
   "market_ready": false,
+  "smart_contract_architecture": {
+    "deployed_testnet_application": {
+      "app_id": 774088598,
+      "version": "Treasury v1 (Prototype)",
+      "schema": {
+        "global_uints": 4,
+        "global_bytes": 1,
+        "local_uints": 2,
+        "local_bytes": 0
+      },
+      "status": "Deployed on Testnet, lacks reservation accounting and overcommit protections"
+    },
+    "hardened_treasury_v2": {
+      "source_file": "contracts/hardened_treasury_app.py",
+      "version": "Treasury v2 (Hardened TEAL 8)",
+      "schema": {
+        "global_uints": 6,
+        "global_bytes": 1,
+        "local_uints": 2,
+        "local_bytes": 0
+      },
+      "features": [
+        "Liquid treasury balance overcommit protection (AssetHolding.balance)",
+        "Dispute period timelocks with admin cancellation",
+        "Anti-drain inner transaction controls (RekeyTo, AssetCloseTo cleared)",
+        "CloseOut active-grant protection",
+        "ClearState reservation auto-recovery"
+      ],
+      "status": "Reproducibly compiled and tested in execution test suite; NOT YET DEPLOYED on-chain"
+    }
+  },
   "security_incident": {
     "id": "IR-2026-001",
-    "status": "ACTIVE_MITIGATION",
+    "status": "ACTIVE_MITIGATION_BLOCKED",
     "compromised_address": "TPLMGGFNG64LKOCKVB7ZMQH5AMSNMV4GLI7GCH4FY2XQEKSIGB77O6LCFM",
-    "mitigation": "Requires owner-controlled wallet signing to rotate manager and reserve on-chain"
+    "open_risks": [
+      "Mainnet ASA 3737683297 manager points to compromised address",
+      "Mainnet ASA 3737683297 reserve points to compromised address",
+      "Testnet ASA 774088414 manager points to compromised address",
+      "Testnet ASA 774088414 reserve points to compromised address",
+      "Mainnet account TPLMGGFN... is not rekeyed (auth-addr absent)",
+      "Mainnet account TPLMGGFN... still holds 20.77 ALGO"
+    ],
+    "mitigation_runbook": "docs/INCIDENT_RESPONSE_KEY_EXPOSURE.md",
+    "unsigned_generator": "scripts/rotate_authority_txns.py"
   },
   "identifiers": {
     "mainnet_asset_id": 3737683297,
@@ -22,11 +62,12 @@
     "testnet_application_address": "A2SUZAVEYRGQNXG7PMJP3W3JZHA7F24PRUTGHOQ4Q6AEWC574VR7S5OZEE"
   },
   "blockers": [
-    "Incident IR-2026-001: Mainnet ASA manager authority must be rotated away from compromised address TPLMGGFN...",
-    "Independent professional security audit of PyTeal treasury contracts not yet commissioned",
-    "Algorand x402 settlement facilitator conformance not supported upstream",
+    "Incident IR-2026-001: Mainnet ASA manager and reserve authority must be rotated away from compromised address TPLMGGFN...",
+    "Incident IR-2026-001: Compromised Mainnet account TPLMGGFN... must be rekeyed and 20.77 ALGO evacuated",
+    "Hardened Treasury v2 is compiled and tested, but not yet deployed to replace Treasury v1 prototype",
+    "Independent third-party professional security audit of PyTeal treasury contracts not yet commissioned",
     "No secondary market liquidity or live DEX trading pool established (Market Status: Pre-Liquidity)",
     "Jurisdiction-specific legal opinion on utility token classification pending",
-    "Non-governmental field partner verification network for off-chain grant review not yet established"
+    "Field partner physical verification network for off-chain grant review not yet established"
   ]
 }

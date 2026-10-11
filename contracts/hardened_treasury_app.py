@@ -6,6 +6,7 @@ from pyteal import (
     App,
     Approve,
     Assert,
+    AssetHolding,
     Btoi,
     Bytes,
     Cond,
@@ -123,6 +124,12 @@ def approval_program():
     # Args: ["propose_grant", amount (uint64)]
     proposed_amount = Btoi(Txn.application_args[1])
     beneficiary_has_no_active_grant = App.localGet(Int(1), KEY_PENDING_GRANT) == Int(0)
+    treasury_balance = AssetHolding.balance(
+        Global.current_application_address(), App.globalGet(KEY_ASSET_ID)
+    )
+    beneficiary_holding = AssetHolding.balance(
+        Txn.accounts[1], App.globalGet(KEY_ASSET_ID)
+    )
 
     propose_grant = Seq(
         Assert(is_admin),
@@ -131,7 +138,15 @@ def approval_program():
         Assert(Txn.accounts.length() >= Int(1)),
         Assert(proposed_amount > Int(0)),
         Assert(proposed_amount <= App.globalGet(KEY_MAX_GRANT)),
+        Assert(App.optedIn(Int(1), Global.current_application_id())),
+        beneficiary_holding,
+        Assert(beneficiary_holding.hasValue()),  # Beneficiary must be opted into QEQ ASA
         Assert(beneficiary_has_no_active_grant),  # Prevents overwriting pending grants
+        treasury_balance,
+        Assert(treasury_balance.hasValue()),
+        Assert(
+            App.globalGet(KEY_TOTAL_RESERVED) + proposed_amount <= treasury_balance.value()
+        ),  # Overcommit protection: total reserved + proposed must not exceed liquid balance
         # Reservation Accounting
         App.globalPut(KEY_TOTAL_RESERVED, App.globalGet(KEY_TOTAL_RESERVED) + proposed_amount),
         # Store in Beneficiary's local state
@@ -212,10 +227,16 @@ def approval_program():
         Approve(),
     )
 
+    # CloseOut is rejected if account has an active pending grant
+    handle_closeout = Seq(
+        Assert(App.localGet(Int(0), KEY_PENDING_GRANT) == Int(0)),
+        Approve(),
+    )
+
     return Cond(
         [Txn.application_id() == Int(0), on_creation],
         [Txn.on_completion() == OnComplete.OptIn, handle_optin],
-        [Txn.on_completion() == OnComplete.CloseOut, Approve()],
+        [Txn.on_completion() == OnComplete.CloseOut, handle_closeout],
         [Txn.on_completion() == OnComplete.UpdateApplication, Return(is_admin)],
         [Txn.on_completion() == OnComplete.DeleteApplication, Return(is_admin)],
         [Txn.on_completion() == OnComplete.NoOp, handle_noop],
@@ -223,7 +244,15 @@ def approval_program():
 
 
 def clear_state_program():
-    return Approve()
+    """Clear state program: safely decrements global reserved tokens if sender had a pending grant."""
+    pending = App.localGet(Int(0), KEY_PENDING_GRANT)
+    return Seq(
+        If(
+            pending > Int(0),
+            App.globalPut(KEY_TOTAL_RESERVED, App.globalGet(KEY_TOTAL_RESERVED) - pending),
+        ),
+        Approve(),
+    )
 
 
 def compile_hardened_teal():

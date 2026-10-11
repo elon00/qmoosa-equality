@@ -9,9 +9,11 @@ import uuid
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+import httpx
 from fastapi import Depends, FastAPI, HTTPException, Request, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import text
@@ -73,9 +75,138 @@ async def security_and_limit_middleware(request: Request, call_next):
 
 MAINNET_ALGOD = os.getenv("MAINNET_ALGOD_URL", "https://mainnet-api.algonode.cloud")
 TESTNET_ALGOD = os.getenv("TESTNET_ALGOD_URL", "https://testnet-api.algonode.cloud")
+MAINNET_INDEXER = os.getenv("MAINNET_INDEXER_URL", "https://mainnet-idx.algonode.cloud")
+TESTNET_INDEXER = os.getenv("TESTNET_INDEXER_URL", "https://testnet-idx.algonode.cloud")
 MAINNET_ASSET_ID = int(os.getenv("MAINNET_ASSET_ID", "3737683297"))
 TESTNET_ASSET_ID = int(os.getenv("TESTNET_ASSET_ID", "774088414"))
 TESTNET_APP_ID = int(os.getenv("TESTNET_APP_ID", "774088598"))
+ADMIN_API_KEY = os.getenv("ADMIN_API_KEY", "qeq-admin-secure-vault-2026")
+
+security = HTTPBearer(auto_error=False)
+
+
+def get_authenticated_admin(
+    request: Request,
+    creds: Optional[HTTPAuthorizationCredentials] = Depends(security),
+) -> str:
+    """Enforce strict administrative authorization for governance actions."""
+    token = None
+    if creds:
+        token = creds.credentials
+    elif "x-admin-key" in request.headers:
+        token = request.headers["x-admin-key"]
+
+    if not token or token != ADMIN_API_KEY:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Unauthorized: Valid administrative Bearer token or X-Admin-Key header required.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    return request.headers.get("x-admin-identity", "authorized_council_admin")
+
+
+def verify_onchain_disbursement_tx(
+    tx_id: str,
+    beneficiary_address: str,
+    expected_amount_qeq: int,
+    network: str = "testnet",
+) -> Dict[str, Any]:
+    """Verify live on-chain Algorand settlement for grant disbursements.
+    Guarantees that the transaction confirmed, transfers QEQ ASA, to beneficiary, with full amount.
+    """
+    expected_asset_id = MAINNET_ASSET_ID if network == "mainnet" else TESTNET_ASSET_ID
+    expected_base_units = expected_amount_qeq * (10 ** 6)
+    idx_url = MAINNET_INDEXER if network == "mainnet" else TESTNET_INDEXER
+    algod_url = MAINNET_ALGOD if network == "mainnet" else TESTNET_ALGOD
+
+    tx = None
+    confirmed_round = 0
+
+    # 1. Query Indexer
+    try:
+        with httpx.Client(timeout=10.0) as client:
+            resp = client.get(f"{idx_url}/v2/transactions/{tx_id}")
+            if resp.status_code == 200:
+                tx_json = resp.json().get("transaction", {})
+                tx = tx_json
+                confirmed_round = tx_json.get("confirmed-round", 0)
+    except Exception:
+        pass
+
+    # 2. Fall back to Algod pending transaction info
+    if not tx:
+        try:
+            algod_client = AlgodClient("", algod_url)
+            pending_info = algod_client.pending_transaction_info(tx_id)
+            if pending_info:
+                confirmed_round = pending_info.get("confirmed-round", 0)
+                tx = pending_info
+        except Exception:
+            pass
+
+    if not tx:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Disbursement transaction {tx_id} could not be located on {network} Algorand ledger.",
+        )
+
+    if confirmed_round <= 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Disbursement transaction {tx_id} is pending and not yet confirmed on {network} ledger.",
+        )
+
+    # 3. Verify asset transfer details
+    is_valid_payout = False
+    details_found = []
+
+    if "asset-transfer-transaction" in tx:
+        axfer = tx["asset-transfer-transaction"]
+        asset_id = axfer.get("asset-id")
+        receiver = axfer.get("receiver")
+        amount = axfer.get("amount", 0)
+        details_found.append(f"axfer: asset={asset_id}, receiver={receiver}, amount={amount}")
+        if asset_id == expected_asset_id and receiver == beneficiary_address and amount >= expected_base_units:
+            is_valid_payout = True
+
+    if not is_valid_payout and "inner-txns" in tx:
+        for inner in tx["inner-txns"]:
+            if "asset-transfer-transaction" in inner:
+                axfer = inner["asset-transfer-transaction"]
+                asset_id = axfer.get("asset-id")
+                receiver = axfer.get("receiver")
+                amount = axfer.get("amount", 0)
+                details_found.append(f"inner-axfer: asset={asset_id}, receiver={receiver}, amount={amount}")
+                if asset_id == expected_asset_id and receiver == beneficiary_address and amount >= expected_base_units:
+                    is_valid_payout = True
+                    break
+
+    if not is_valid_payout and "txn" in tx and "txn" in tx["txn"]:
+        raw_txn = tx["txn"]["txn"]
+        if raw_txn.get("type") == "axfer":
+            asset_id = raw_txn.get("xaid")
+            receiver = raw_txn.get("arcv")
+            amount = raw_txn.get("aamt", 0)
+            details_found.append(f"algod-axfer: asset={asset_id}, receiver={receiver}, amount={amount}")
+            if asset_id == expected_asset_id and receiver == beneficiary_address and amount >= expected_base_units:
+                is_valid_payout = True
+
+    if not is_valid_payout:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"On-chain disbursement validation failed for transaction {tx_id}. "
+                f"Required: asset={expected_asset_id}, receiver={beneficiary_address}, min_amount={expected_base_units}. "
+                f"Ledger observations: {', '.join(details_found) if details_found else 'No valid asset transfer found'}."
+            ),
+        )
+
+    return {
+        "tx_id": tx_id,
+        "confirmed_round": confirmed_round,
+        "network": network,
+        "verified": True,
+    }
 
 
 # --- Pydantic Schemas ---
@@ -104,7 +235,6 @@ class GrantSubmissionRequest(BaseModel):
 class GrantReviewRequest(BaseModel):
     status: str
     reviewer_notes: str = Field(..., min_length=3, max_length=1000)
-    reviewer_identity: str = Field(..., min_length=3, max_length=100)
 
     @field_validator("status")
     @classmethod
@@ -116,7 +246,6 @@ class GrantReviewRequest(BaseModel):
 
 class GrantDisburseRequest(BaseModel):
     onchain_tx_id: str = Field(..., min_length=52, max_length=64)
-    actor_identity: str = Field(..., min_length=3, max_length=100)
 
 
 class PqcVerifyRequest(BaseModel):
@@ -290,7 +419,12 @@ def submit_grant(req: GrantSubmissionRequest, db: Session = Depends(get_db)):
 
 
 @app.patch("/api/grants/proposals/{grant_id}/review")
-def review_grant(grant_id: str, req: GrantReviewRequest, db: Session = Depends(get_db)):
+def review_grant(
+    grant_id: str,
+    req: GrantReviewRequest,
+    reviewer: str = Depends(get_authenticated_admin),
+    db: Session = Depends(get_db),
+):
     proposal = db.query(GrantProposal).filter(GrantProposal.id == grant_id).first()
     if not proposal:
         raise HTTPException(status_code=404, detail="Grant proposal not found")
@@ -306,7 +440,7 @@ def review_grant(grant_id: str, req: GrantReviewRequest, db: Session = Depends(g
         entity_type="GRANT_PROPOSAL",
         entity_id=grant_id,
         action="STATUS_CHANGED",
-        actor=req.reviewer_identity,
+        actor=reviewer,
         details={"old_status": old_status, "new_status": req.status, "notes": req.reviewer_notes},
     )
 
@@ -314,13 +448,27 @@ def review_grant(grant_id: str, req: GrantReviewRequest, db: Session = Depends(g
 
 
 @app.patch("/api/grants/proposals/{grant_id}/disburse")
-def record_disbursement(grant_id: str, req: GrantDisburseRequest, db: Session = Depends(get_db)):
+def record_disbursement(
+    grant_id: str,
+    req: GrantDisburseRequest,
+    network: str = "testnet",
+    admin: str = Depends(get_authenticated_admin),
+    db: Session = Depends(get_db),
+):
     proposal = db.query(GrantProposal).filter(GrantProposal.id == grant_id).first()
     if not proposal:
         raise HTTPException(status_code=404, detail="Grant proposal not found")
 
     if proposal.status != GrantStatus.APPROVED:
         raise HTTPException(status_code=400, detail="Only APPROVED proposals can be disbursed")
+
+    # Live On-Chain Settlement Verification Gate
+    verification = verify_onchain_disbursement_tx(
+        tx_id=req.onchain_tx_id,
+        beneficiary_address=proposal.beneficiary_address,
+        expected_amount_qeq=proposal.requested_amount_qeq,
+        network=network,
+    )
 
     proposal.status = GrantStatus.DISBURSED
     proposal.onchain_tx_id = req.onchain_tx_id
@@ -332,11 +480,19 @@ def record_disbursement(grant_id: str, req: GrantDisburseRequest, db: Session = 
         entity_type="GRANT_PROPOSAL",
         entity_id=grant_id,
         action="DISBURSED",
-        actor=req.actor_identity,
-        details={"onchain_tx_id": req.onchain_tx_id},
+        actor=admin,
+        details={
+            "onchain_tx_id": req.onchain_tx_id,
+            "confirmed_round": verification.get("confirmed_round"),
+            "network": network,
+        },
     )
 
-    return {"message": "Disbursement recorded successfully", "proposal": proposal.to_dict()}
+    return {
+        "message": "Disbursement verified on-chain and recorded successfully",
+        "verification": verification,
+        "proposal": proposal.to_dict(),
+    }
 
 
 @app.get("/api/grants/audit-logs/{grant_id}")

@@ -9,7 +9,7 @@ An independent Algorand economic-inclusion platform dedicated to supporting Mool
 
 ## ⚖️ Legal & Independence Disclosures
 
-- **Independent Project Notice**: Qmoosa Equality is an independent open-source project. It is **not** affiliated with, based on, sponsored by, or endorsed by Muhammad Yunus or any of his associated organizations.
+- **Independent Project Notice**: Qmoosa Equality is an independent open-source community initiative with no affiliation to or endorsement from any external foundation or individuals.
 - **No Financial Guarantees**: Token issuance alone does not eliminate poverty, ensure economic security, or generate wealth. QEQ does not offer, promise, or guarantee financial returns, yield, dividend payouts, or income.
 - **Pre-Market Status**: QEQ is currently **unlisted** and has **zero secondary market liquidity**. It cannot be redeemed for fiat currency.
 
