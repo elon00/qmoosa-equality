@@ -1,72 +1,103 @@
 # Qmoosa Equality
 
 An experimental Algorand economic-inclusion project for Moolnivasi, SC, ST,
-OBC, minorities and underserved communities worldwide. An independent project
+OBC, minorities, and underserved communities worldwide. An independent initiative
 for economic inclusion; token issuance alone does not eliminate poverty.
 
-**Status: source prototype. Not deployed to testnet or mainnet.**
-Proposed repository: `elon00/qmoosa-equality`. Proposed ticker: `QEQ`.
+**Repository**: `elon00/qmoosa-equality` | **Ticker**: `QEQ` | **Standard**: Algorand Standard Asset (ASA)
 
-## Run
+---
+
+## 🛡️ Reality Gate Protocol (Zero Simulation)
+
+This project strictly operates under the **Reality Gate**:
+- **Zero Simulation / Zero Mock**: No synthetic RPC data, mock responses, or fake deployment claims are ever used.
+- **Fail-Closed Conjunction**: If any cryptographic proof, funded on-chain balance, or security audit requirement is missing, execution halts closed with an explicit error code.
+- **Post-Quantum Cryptography**: Real C-extension execution of NIST FIPS 204 **ML-DSA-65** for domain-separated manifest signing and tamper verification.
+
+Detailed specifications can be found in the **[Official Wiki](wiki/Home.md)**:
+- [Reality Gate Specification](wiki/Reality-Gate.md)
+- [Algorand Testnet Deployment](wiki/Algorand-Testnet-Deployment.md)
+- [Algorand Mainnet Deployment](wiki/Algorand-Mainnet-Deployment.md)
+- [Post-Quantum Cryptography](wiki/Post-Quantum-Cryptography.md)
+- [Tokenomics & Social Inclusion](wiki/Tokenomics-and-Inclusion.md)
+
+---
+
+## 💻 Local Setup & Verification
 
 Python 3.12 recommended:
 
 ```bash
 python -m venv .venv
+# Linux/macOS:
 source .venv/bin/activate
+# Windows (PowerShell):
+.\.venv\Scripts\activate
+
 python -m pip install -r requirements.txt
 python scripts/check.py
 ```
 
-Windows: activate `.venv\Scripts\activate` instead.
-`python scripts/check.py --release` intentionally exits 2 while release is blocked.
-Passing component tests does not mean a deployment or financial system is safe.
+`python scripts/check.py --release` intentionally exits `2` while release is blocked, preventing false claims of production readiness. Passing component tests does not mean a deployment or financial system is safe.
 
-## What exists
+---
 
-- Integer allocation and funded issuance-budget calculations with tests.
-- Real off-chain ML-DSA-65 signature adapter and signature/tampering tests.
-- HTTPS adapters for OpenAI-compatible chat providers and x402 discovery.
-- Unsigned Algorand testnet ASA transaction preparation using the official SDK.
-- GitHub component and failing release-readiness jobs.
-- Publication script for an authenticated GitHub CLI account `elon00`.
+## 🌐 Algorand Blockchain Deployment
 
-## What does not exist yet
+### 1. Testnet Deployment (Stage 1 Gate)
 
-Grant/treasury smart contracts, unlimited issuance contract, end-user frontend,
+The deployment script interacts with real Algorand Testnet nodes (`https://testnet-api.algonode.cloud`):
+
+```powershell
+python scripts/deploy_testnet.py --mnemonic "YOUR_25_WORD_MNEMONIC"
+```
+
+> **Reality Gate Check**:
+> The deploying account must have at least **0.2 ALGO** on Testnet. If the account balance is `0.0 ALGO`, the script refuses to simulate deployment and outputs the official dispenser link:
+> **Fund free Testnet ALGO**: [https://lora.algokit.io/testnet/fund](https://lora.algokit.io/testnet/fund)
+
+### 2. Mainnet Deployment (Stage 3 Gate)
+
+Deploying to Mainnet permanently creates an immutable ASA on the public Algorand blockchain and consumes real ALGO for the Minimum Balance Requirement (MBR) and network fees:
+
+```powershell
+python scripts/deploy_mainnet.py --mnemonic "YOUR_25_WORD_MNEMONIC" --confirm-mainnet
+```
+
+> **Mainnet Safeguards**:
+> - Requires explicit `--confirm-mainnet` flag.
+> - Verifies live genesis `mainnet-v1.0` and queries live Mainnet balance.
+> - Fixed supply of 1,000,000 QEQ (1,000,000,000,000 base units at 6 decimals).
+> - Freeze and Clawback addresses are permanently set to `None` to guarantee non-custodial and censorship-resistant transfers.
+
+---
+
+## 🔍 What Exists Today
+
+- **Integer allocation and funded issuance-budget calculations**: Strict integer math with remainder allocation to community grants ($sum \equiv n$).
+- **Real off-chain ML-DSA-65 signature adapter**: Implemented with `pqcrypto` and verified against document tampering.
+- **HTTPS adapters**: Secure client for OpenAI-compatible chat providers and x402 discovery.
+- **Algorand Testnet & Mainnet deployment scripts**: Real on-chain ASA creation scripts using official Algorand SDK.
+- **Fail-closed CI/CD verification**: GitHub Actions workflows validating component tests and release blockers.
+- **Complete Reality Gate Wiki documentation**: Comprehensive architectural guides in `wiki/`.
+
+---
+
+## ⚠️ What Does Not Exist Yet
+
+Grant/treasury smart contracts (TEAL/PyTeal), unlimited issuance contract, end-user frontend,
 multi-chain wallet signing, Conway runtime integration, x402 settlement,
 production chatbot routing, independent security audit and live deployments.
-See `STATUS.json`. No fake RPC responses, asset IDs or success manifests are supplied.
+See [`STATUS.json`](STATUS.json). No fake RPC responses, asset IDs or success manifests are supplied.
 
-## Publish source
+---
 
-After installing GitHub CLI and authenticating as `elon00`, run:
+## 🔐 Security Boundaries
 
-```bash
-bash scripts/publish_github.sh
-```
+- Never paste wallet seeds into chat or commit them to git.
+- Application signatures do not replace Algorand transaction signatures or make the blockchain itself PQ-safe.
+- AI must never receive custody or autonomously approve beneficiaries or funds.
+- Standard ASA supply is fixed at creation; an unlimited-supply model requires custom smart contract architecture.
 
-This creates a PUBLIC repository and pushes source; it does not launch a coin.
-It requires an available repository name and configured git author identity.
-Review source before publishing. No private keys are needed for publishing.
-
-## Prepare testnet asset transaction
-
-```bash
-python scripts/prepare_asset.py --sender YOUR_ALGORAND_ADDRESS --total 1000000000000
-```
-
-The example is one million tokens at six decimals, not a chosen economic supply.
-The tool fetches real testnet parameters and creates an unsigned transaction.
-A wallet must review and sign it separately. It does not broadcast transactions.
-Standard ASA supply is fixed at creation; the unlimited-supply request remains unresolved.
-
-## Security boundaries
-
-Never paste wallet seeds into chat or put them in git. Application signatures
-do not replace Algorand transaction signatures or make the blockchain PQ-safe.
-ML-DSA implementation is not a claim of FIPS product validation.
-AI must never receive custody or autonomously approve beneficiaries or funds.
-No mainnet spending, contracts or assets have been created by this package.
-
-See `docs/DESIGN.md` for tokenomics and remaining implementation requirements.
+See [`docs/DESIGN.md`](docs/DESIGN.md) for full tokenomics and implementation specifications.
