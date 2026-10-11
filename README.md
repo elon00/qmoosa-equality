@@ -24,6 +24,15 @@ Detailed specifications can be found in the **[Official Wiki](wiki/Home.md)**:
 
 ---
 
+## 🌐 Live On-Chain Deployments (Verified Reality Gate Evidence)
+
+| Network | Asset Name | Ticker | Asset ID | Confirmed Round | Transaction ID | Explorer Link |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **Algorand Testnet** | Qmoosa Equality | `QEQ` | [`774088414`](https://lora.algokit.io/testnet/asset/774088414) | `68171764` | `GDMORMEM...` | [View on Lora Testnet](https://lora.algokit.io/testnet/asset/774088414) |
+| **Algorand Mainnet** | Qmoosa Equality | `QEQ` | [`3737683297`](https://lora.algokit.io/mainnet/asset/3737683297) | `65891166` | `U5LVAFLK...` | [View on Lora Mainnet](https://lora.algokit.io/mainnet/asset/3737683297) |
+
+---
+
 ## 💻 Local Setup & Verification
 
 Python 3.12 recommended:

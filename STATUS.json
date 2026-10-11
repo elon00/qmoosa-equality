@@ -1,5 +1,5 @@
 {
-  "stage": "testnet-deployed",
+  "stage": "mainnet-deployed",
   "deployed": true,
   "asset_id": 774088414,
   "application_id": null,
@@ -13,5 +13,7 @@
     "PQC is off-chain only; on-chain enforcement and independent audit are missing",
     "No independent audit or public testnet acceptance evidence",
     "No funded authorized deployer or mainnet transaction evidence"
-  ]
+  ],
+  "mainnet_asset_id": 3737683297,
+  "mainnet_tx_id": "U5LVAFLK462ARKMWPDFZVX5MN24534CDZZ5AXDFHXWGF3R4O2FSA"
 }
