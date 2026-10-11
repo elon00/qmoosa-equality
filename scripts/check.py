@@ -4,6 +4,7 @@ live on-chain ledger queries, and security incident gates.
 """
 import argparse
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -55,10 +56,13 @@ def verify_onchain_state(status_data: dict) -> bool:
         print(f"[FAIL] On-chain query failed: {e}", file=sys.stderr)
         return False
 
-def check_security_incident_gate() -> bool:
-    print("\n--- [VERIFYING] Security Incident Authority Gate (IR-2026-001) ---")
+def check_security_incident_gate(status_data: dict) -> bool:
+    print("\n--- [VERIFYING] Production Release & Incident Authority Gate ---")
     mc = AlgodClient("", "https://mainnet-api.algonode.cloud")
     tc = AlgodClient("", "https://testnet-api.algonode.cloud")
+
+    # Approved Target Authority Address designated by owner
+    approved_safe_addr = os.getenv("APPROVED_SAFE_AUTHORITY_ADDR") or status_data.get("approved_safe_authority_address")
 
     blockers = []
 
@@ -70,16 +74,25 @@ def check_security_incident_gate() -> bool:
         m_reserve = params.get("reserve")
 
         if m_manager == COMPROMISED_ADMIN_ADDR:
-            blockers.append("Mainnet ASA 3737683297 manager is still compromised key TPLMGGFN...")
+            blockers.append("Mainnet ASA 3737683297 manager is still compromised address TPLMGGFN...")
             print("  [BLOCKED] Mainnet ASA Manager: Still compromised address TPLMGGFN...", file=sys.stderr)
+        elif not approved_safe_addr:
+            blockers.append(f"Mainnet ASA 3737683297 manager ({m_manager}) cannot be certified: No approved_safe_authority_address designated by owner.")
+            print(f"  [BLOCKED] Mainnet ASA Manager: Rotated to {m_manager}, but no approved owner address is designated.", file=sys.stderr)
+        elif m_manager != approved_safe_addr:
+            blockers.append(f"Mainnet ASA 3737683297 manager ({m_manager}) does NOT match owner's approved safe address ({approved_safe_addr}).")
+            print(f"  [BLOCKED] Mainnet ASA Manager: {m_manager} does NOT match approved address {approved_safe_addr}.", file=sys.stderr)
         else:
-            print(f"  [PASS] Mainnet ASA Manager rotated to: {m_manager}")
+            print(f"  [PASS] Mainnet ASA Manager verified to match approved address: {m_manager}")
 
         if m_reserve == COMPROMISED_ADMIN_ADDR:
-            blockers.append("Mainnet ASA 3737683297 reserve is still compromised key TPLMGGFN...")
+            blockers.append("Mainnet ASA 3737683297 reserve is still compromised address TPLMGGFN...")
             print("  [BLOCKED] Mainnet ASA Reserve: Still compromised address TPLMGGFN...", file=sys.stderr)
+        elif not approved_safe_addr or m_reserve != approved_safe_addr:
+            blockers.append(f"Mainnet ASA 3737683297 reserve ({m_reserve}) does not match approved address ({approved_safe_addr or 'NONE'}).")
+            print(f"  [BLOCKED] Mainnet ASA Reserve: {m_reserve} does not match approved address {approved_safe_addr or 'NONE'}.", file=sys.stderr)
         else:
-            print(f"  [PASS] Mainnet ASA Reserve rotated to: {m_reserve}")
+            print(f"  [PASS] Mainnet ASA Reserve verified to match approved address: {m_reserve}")
     except Exception as e:
         blockers.append(f"Failed to query Mainnet ASA: {e}")
         print(f"  [ERROR] Mainnet ASA query failed: {e}", file=sys.stderr)
@@ -92,16 +105,22 @@ def check_security_incident_gate() -> bool:
         t_reserve = t_params.get("reserve")
 
         if t_manager == COMPROMISED_ADMIN_ADDR:
-            blockers.append("Testnet ASA 774088414 manager is still compromised key TPLMGGFN...")
+            blockers.append("Testnet ASA 774088414 manager is still compromised address TPLMGGFN...")
             print("  [BLOCKED] Testnet ASA Manager: Still compromised address TPLMGGFN...", file=sys.stderr)
+        elif not approved_safe_addr or t_manager != approved_safe_addr:
+            blockers.append(f"Testnet ASA 774088414 manager ({t_manager}) does not match approved address ({approved_safe_addr or 'NONE'}).")
+            print(f"  [BLOCKED] Testnet ASA Manager: {t_manager} does not match approved address {approved_safe_addr or 'NONE'}.", file=sys.stderr)
         else:
-            print(f"  [PASS] Testnet ASA Manager rotated to: {t_manager}")
+            print(f"  [PASS] Testnet ASA Manager verified to match approved address: {t_manager}")
 
         if t_reserve == COMPROMISED_ADMIN_ADDR:
-            blockers.append("Testnet ASA 774088414 reserve is still compromised key TPLMGGFN...")
+            blockers.append("Testnet ASA 774088414 reserve is still compromised address TPLMGGFN...")
             print("  [BLOCKED] Testnet ASA Reserve: Still compromised address TPLMGGFN...", file=sys.stderr)
+        elif not approved_safe_addr or t_reserve != approved_safe_addr:
+            blockers.append(f"Testnet ASA 774088414 reserve ({t_reserve}) does not match approved address ({approved_safe_addr or 'NONE'}).")
+            print(f"  [BLOCKED] Testnet ASA Reserve: {t_reserve} does not match approved address {approved_safe_addr or 'NONE'}.", file=sys.stderr)
         else:
-            print(f"  [PASS] Testnet ASA Reserve rotated to: {t_reserve}")
+            print(f"  [PASS] Testnet ASA Reserve verified to match approved address: {t_reserve}")
     except Exception as e:
         blockers.append(f"Failed to query Testnet ASA: {e}")
         print(f"  [ERROR] Testnet ASA query failed: {e}", file=sys.stderr)
@@ -115,8 +134,11 @@ def check_security_incident_gate() -> bool:
         if not auth_addr:
             blockers.append("Compromised Mainnet account is NOT rekeyed (auth-addr absent). Anyone with the exposed seed can sign transactions!")
             print("  [BLOCKED] Mainnet Account Rekey: Account NOT rekeyed (auth-addr is absent).", file=sys.stderr)
+        elif not approved_safe_addr or auth_addr != approved_safe_addr:
+            blockers.append(f"Mainnet Account auth-addr ({auth_addr}) does not match owner's approved safe address ({approved_safe_addr or 'NONE'}).")
+            print(f"  [BLOCKED] Mainnet Account Rekey: Rekeyed to {auth_addr}, but does not match approved address {approved_safe_addr or 'NONE'}.", file=sys.stderr)
         else:
-            print(f"  [PASS] Mainnet Account Rekeyed to: {auth_addr}")
+            print(f"  [PASS] Mainnet Account Rekeyed to approved address: {auth_addr}")
 
         if algo_balance > 1.0:
             blockers.append(f"Compromised Mainnet account still holds {algo_balance:.2f} ALGO. Funds must be evacuated!")
@@ -127,24 +149,37 @@ def check_security_incident_gate() -> bool:
         blockers.append(f"Failed to query compromised account info: {e}")
         print(f"  [ERROR] Compromised account query failed: {e}", file=sys.stderr)
 
-    # 4. Testnet Treasury Application Status
+    # 4. Mandatory Hardened Treasury v2 On-Chain Deployment Gate
     try:
-        app_info = tc.application_info(774088598)
-        creator = app_info.get("params", {}).get("creator")
-        if creator == COMPROMISED_ADMIN_ADDR:
-            print("  [NOTE] Testnet Treasury App 774088598 is Treasury v1 prototype created by TPLMGGFN... Hardened Treasury v2 is compiled but not yet deployed.")
+        app_id = status_data.get("application_id") or 774088598
+        app_info = tc.application_info(app_id)
+        params = app_info.get("params", {})
+        creator = params.get("creator")
+        schema = params.get("global-state-schema", {})
+        num_uints = schema.get("num-uint", 0)
+
+        if num_uints < 6 or creator == COMPROMISED_ADMIN_ADDR:
+            blockers.append(
+                f"Hardened Treasury v2 is NOT deployed on Testnet. On-chain App #{app_id} is Treasury v1 prototype "
+                f"(has only {num_uints} uints schema; creator is {creator}). Hardened v2 deployment with overcommit "
+                f"protection and reservation accounting is strictly required for release certification."
+            )
+            print(f"  [BLOCKED] Smart Contract Deployment: App #{app_id} is Treasury v1 (schema {num_uints} uints). Hardened Treasury v2 is NOT deployed.", file=sys.stderr)
+        else:
+            print(f"  [PASS] Hardened Treasury v2 on-chain deployment verified on Testnet (App #{app_id}).")
     except Exception as e:
-        print(f"  [WARN] Failed to query testnet app: {e}", file=sys.stderr)
+        blockers.append(f"Failed to verify treasury application on Testnet: {e}")
+        print(f"  [ERROR] Treasury application query failed: {e}", file=sys.stderr)
 
     if blockers:
-        print("\n[SECURITY AUDIT SUMMARY] The following critical security blockers remain unresolved:", file=sys.stderr)
+        print("\n[RELEASE GATE AUDIT SUMMARY] The following critical security blockers remain unresolved:", file=sys.stderr)
         for b in blockers:
             print(f"  - {b}", file=sys.stderr)
-        print("\nProduction release remains strictly BLOCKED until on-chain rotation and rekeying are confirmed.", file=sys.stderr)
+        print("\nProduction release remains strictly BLOCKED until on-chain rotation, rekeying, and Treasury v2 deployment are verified.", file=sys.stderr)
         print("See docs/INCIDENT_RESPONSE_KEY_EXPOSURE.md for owner-signed migration instructions.", file=sys.stderr)
         return False
     else:
-        print("\n[ALL INCIDENT AUTHORITIES SECURED]")
+        print("\n[ALL INCIDENT AUTHORITIES & CONTRACTS SECURED]")
         return True
 
 
@@ -198,14 +233,14 @@ def main():
         print("\n" + "*" * 65)
         print("CHECKING PRODUCTION RELEASE READINESS")
         print("*" * 65)
-        is_secured = check_security_incident_gate()
+        is_secured = check_security_incident_gate(status_data)
         if not is_secured:
             print("\n[CRITICAL RELEASE GATE HALT]")
             print("Release certification FAILS CLOSED (exit code 2).")
-            print("Reason: Key Exposure Incident IR-2026-001 requires administrative authority rotation.")
+            print("Reason: Key Exposure Incident IR-2026-001 or missing contract deployment requires resolution.")
             sys.exit(2)
         else:
-            print("[PASS] Administrative authority rotation verified on-chain.")
+            print("[PASS] Administrative authority rotation and contract deployment verified on-chain.")
             print("[CERTIFIED] Release readiness confirmed.")
             sys.exit(0)
 

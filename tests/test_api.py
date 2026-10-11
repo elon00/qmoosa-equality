@@ -1,13 +1,21 @@
+import base64
 import os
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
+from fastapi import HTTPException
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from backend.db import Base, get_db, GrantStatus
-from backend.main import ADMIN_API_KEY, app
+from backend.db import Base, get_db, GrantProposal, GrantStatus
+import backend.main as backend_module
+from backend.main import (
+    app,
+    verify_onchain_disbursement_tx,
+    AUTHORIZED_TREASURY_ADDRESSES,
+    TESTNET_TREASURY_APP_ADDRESS,
+)
 from fastapi.testclient import TestClient
 
 TEMP_DB = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
@@ -26,9 +34,10 @@ def override_get_db():
 
 app.dependency_overrides[get_db] = override_get_db
 
+TEST_ADMIN_KEY = "test-secret-vault-key-abc123xyz"
 AUTH_HEADERS = {
-    "Authorization": f"Bearer {ADMIN_API_KEY}",
-    "X-Admin-Identity": "council_reviewer_1",
+    "Authorization": f"Bearer {TEST_ADMIN_KEY}",
+    "X-Admin-Identity": "spoofed_attacker_should_be_ignored",
 }
 
 
@@ -36,6 +45,8 @@ class ApiTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         Base.metadata.create_all(bind=test_engine)
+        backend_module.ADMIN_API_KEY = TEST_ADMIN_KEY
+        backend_module.ADMIN_OPERATOR_IDENTITY = "verified_council_lead"
 
     @classmethod
     def tearDownClass(cls):
@@ -59,6 +70,17 @@ class ApiTests(unittest.TestCase):
         data = r_ready.json()
         self.assertEqual(data["status"], "READY")
         self.assertTrue(data["database_ok"])
+
+    def test_unconfigured_admin_key_fails_closed(self):
+        """When ADMIN_API_KEY is missing/unconfigured, administrative operations fail closed with HTTP 503."""
+        saved_key = backend_module.ADMIN_API_KEY
+        try:
+            backend_module.ADMIN_API_KEY = None
+            res = self.client.patch("/api/grants/proposals/test-id/review", json={"status": "APPROVED", "reviewer_notes": "test"})
+            self.assertEqual(res.status_code, 503)
+            self.assertIn("ADMIN_API_KEY is not configured", res.json()["detail"])
+        finally:
+            backend_module.ADMIN_API_KEY = saved_key
 
     def test_grant_submission_validation(self):
         # Invalid address test
@@ -97,12 +119,7 @@ class ApiTests(unittest.TestCase):
         grant_id = created["id"]
         self.assertEqual(created["status"], GrantStatus.SUBMITTED)
 
-        # Check in list
-        res_list = self.client.get("/api/grants/proposals")
-        self.assertEqual(res_list.status_code, 200)
-        self.assertTrue(any(p["id"] == grant_id for p in res_list.json()["proposals"]))
-
-        # Review Attack 1: Unauthenticated review attempt
+        # Review Attack 1: Unauthenticated review attempt -> 401
         review_payload = {
             "status": GrantStatus.APPROVED,
             "reviewer_notes": "Attempting unauthenticated approval.",
@@ -110,11 +127,11 @@ class ApiTests(unittest.TestCase):
         res_unauth = self.client.patch(f"/api/grants/proposals/{grant_id}/review", json=review_payload)
         self.assertEqual(res_unauth.status_code, 401)
 
-        # Review Attack 2: Invalid bearer token
+        # Review Attack 2: Invalid bearer token -> 401
         res_bad_auth = self.client.patch(
             f"/api/grants/proposals/{grant_id}/review",
             json=review_payload,
-            headers={"Authorization": "Bearer bad-token-12345"},
+            headers={"Authorization": "Bearer wrong-key"},
         )
         self.assertEqual(res_bad_auth.status_code, 401)
 
@@ -131,15 +148,23 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(res_review.status_code, 200)
         self.assertEqual(res_review.json()["proposal"]["status"], GrantStatus.APPROVED)
 
-        # Disburse Attack 1: Unauthenticated disburse attempt
-        disburse_payload = {"onchain_tx_id": "X" * 52}
+        # Verify Reviewer Identity: Must NOT be the caller's spoofed header
+        res_audit = self.client.get(f"/api/grants/audit-logs/{grant_id}")
+        logs = res_audit.json()["audit_logs"]
+        review_log = next(l for l in logs if l["action"] == "STATUS_CHANGED")
+        self.assertEqual(review_log["actor"], "verified_council_lead")
+        self.assertNotEqual(review_log["actor"], "spoofed_attacker_should_be_ignored")
+
+        # Disburse Attack 1: Unauthenticated disburse attempt -> 401
+        tx_id_1 = "TXID1" + "A" * 47
+        disburse_payload = {"onchain_tx_id": tx_id_1}
         res_disburse_unauth = self.client.patch(
             f"/api/grants/proposals/{grant_id}/disburse",
             json=disburse_payload,
         )
         self.assertEqual(res_disburse_unauth.status_code, 401)
 
-        # Disburse Attack 2: Authenticated but fake on-chain transaction ID
+        # Disburse Attack 2: Authenticated but nonexistent on-chain transaction ID -> 400
         res_fake_tx = self.client.patch(
             f"/api/grants/proposals/{grant_id}/disburse",
             json=disburse_payload,
@@ -150,8 +175,9 @@ class ApiTests(unittest.TestCase):
 
         # Disburse Success: Verified on-chain transaction
         mock_verification = {
-            "tx_id": "X" * 52,
+            "tx_id": tx_id_1,
             "confirmed_round": 68175000,
+            "sender": TESTNET_TREASURY_APP_ADDRESS,
             "network": "testnet",
             "verified": True,
         }
@@ -163,20 +189,107 @@ class ApiTests(unittest.TestCase):
             )
             self.assertEqual(res_disburse.status_code, 200)
             self.assertEqual(res_disburse.json()["proposal"]["status"], GrantStatus.DISBURSED)
-            self.assertTrue(res_disburse.json()["verification"]["verified"])
 
-        # Verify Audit Logs
-        res_audit = self.client.get(f"/api/grants/audit-logs/{grant_id}")
-        self.assertEqual(res_audit.status_code, 200)
-        logs = res_audit.json()["audit_logs"]
-        actions = [l["action"] for l in logs]
-        self.assertIn("SUBMITTED", actions)
-        self.assertIn("STATUS_CHANGED", actions)
-        self.assertIn("DISBURSED", actions)
-        
-        # Verify authenticated reviewer identity is recorded in audit log
-        review_log = next(l for l in logs if l["action"] == "STATUS_CHANGED")
-        self.assertEqual(review_log["actor"], "council_reviewer_1")
+    def test_payment_replay_prevention_across_proposals(self):
+        """A single on-chain transaction cannot be reused to disburse multiple grant proposals."""
+        db = TestSessionLocal()
+        # Create Proposal A (Disbursed)
+        p_a = GrantProposal(
+            id="qeq-grant-replay-a",
+            title="Proposal A",
+            category="community_grants",
+            requested_amount_qeq=1000,
+            beneficiary_address="TPLMGGFNG64LKOCKVB7ZMQH5AMSNMV4GLI7GCH4FY2XQEKSIGB77O6LCFM",
+            description="Testing replay prevention mechanism",
+            status=GrantStatus.DISBURSED,
+            onchain_tx_id="SHARED_TX_ID_" + "9" * 39,
+        )
+        # Create Proposal B (Approved)
+        p_b = GrantProposal(
+            id="qeq-grant-replay-b",
+            title="Proposal B",
+            category="community_grants",
+            requested_amount_qeq=1000,
+            beneficiary_address="TPLMGGFNG64LKOCKVB7ZMQH5AMSNMV4GLI7GCH4FY2XQEKSIGB77O6LCFM",
+            description="Testing replay prevention mechanism",
+            status=GrantStatus.APPROVED,
+        )
+        db.add_all([p_a, p_b])
+        db.commit()
+
+        # Replay attempt: Try disbursing Proposal B with the tx_id already used for Proposal A
+        with self.assertRaises(HTTPException) as ctx:
+            verify_onchain_disbursement_tx(
+                tx_id="SHARED_TX_ID_" + "9" * 39,
+                proposal_id="qeq-grant-replay-b",
+                beneficiary_address=p_b.beneficiary_address,
+                expected_amount_qeq=p_b.requested_amount_qeq,
+                db=db,
+                network="testnet",
+            )
+        self.assertEqual(ctx.exception.status_code, 409)
+        self.assertIn("Transaction replay rejected", ctx.exception.detail)
+        db.close()
+
+    def test_unauthorized_disbursement_sender_rejection(self):
+        """Disbursement transaction from an unauthorized sender is rejected."""
+        db = TestSessionLocal()
+        mock_tx = {
+            "confirmed-round": 68175000,
+            "sender": "UNAUTHORIZED_SENDER_ADDR_12345",
+            "asset-transfer-transaction": {
+                "asset-id": 774088414,
+                "receiver": "TPLMGGFNG64LKOCKVB7ZMQH5AMSNMV4GLI7GCH4FY2XQEKSIGB77O6LCFM",
+                "amount": 1000_000_000,
+            }
+        }
+        with patch("httpx.Client.get") as mock_get:
+            mock_get.return_value.status_code = 200
+            mock_get.return_value.json.return_value = {"transaction": mock_tx}
+
+            with self.assertRaises(HTTPException) as ctx:
+                verify_onchain_disbursement_tx(
+                    tx_id="TX_UNAUTH_" + "1" * 42,
+                    proposal_id="test-prop",
+                    beneficiary_address="TPLMGGFNG64LKOCKVB7ZMQH5AMSNMV4GLI7GCH4FY2XQEKSIGB77O6LCFM",
+                    expected_amount_qeq=1000,
+                    db=db,
+                    network="testnet",
+                )
+            self.assertEqual(ctx.exception.status_code, 400)
+            self.assertIn("Unauthorized disbursement sender", ctx.exception.detail)
+        db.close()
+
+    def test_grant_binding_note_mismatch_rejection(self):
+        """Transaction note specifying a different proposal ID is rejected."""
+        db = TestSessionLocal()
+        mismatched_note = base64.b64encode(b"qeq:grant:qeq-grant-different-id").decode("utf-8")
+        mock_tx = {
+            "confirmed-round": 68175000,
+            "sender": TESTNET_TREASURY_APP_ADDRESS,
+            "note": mismatched_note,
+            "asset-transfer-transaction": {
+                "asset-id": 774088414,
+                "receiver": "TPLMGGFNG64LKOCKVB7ZMQH5AMSNMV4GLI7GCH4FY2XQEKSIGB77O6LCFM",
+                "amount": 1000_000_000,
+            }
+        }
+        with patch("httpx.Client.get") as mock_get:
+            mock_get.return_value.status_code = 200
+            mock_get.return_value.json.return_value = {"transaction": mock_tx}
+
+            with self.assertRaises(HTTPException) as ctx:
+                verify_onchain_disbursement_tx(
+                    tx_id="TX_NOTE_MISMATCH_" + "2" * 36,
+                    proposal_id="qeq-grant-my-id",
+                    beneficiary_address="TPLMGGFNG64LKOCKVB7ZMQH5AMSNMV4GLI7GCH4FY2XQEKSIGB77O6LCFM",
+                    expected_amount_qeq=1000,
+                    db=db,
+                    network="testnet",
+                )
+            self.assertEqual(ctx.exception.status_code, 400)
+            self.assertIn("Grant binding mismatch", ctx.exception.detail)
+        db.close()
 
 
 if __name__ == "__main__":

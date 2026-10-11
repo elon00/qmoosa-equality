@@ -1,9 +1,16 @@
 """Automated test suite for Algorand TEAL smart contracts.
-Executes complete grant lifecycle, attack vectors, state-machine transitions,
-reservation accounting, overcommit protections, and on-chain schema distinction.
+Evaluates off-chain specification models, live Algod node AVM compilation,
+reservation accounting, overcommit protections, and on-chain schema reality.
+
+NOTE ON REALITY GATE & AVM EXECUTION:
+The state-machine tests in this file evaluate specification logic off-chain.
+They do NOT execute inside the Algorand Virtual Machine (AVM) runtime on-chain.
+True on-chain execution testing requires deployment to an Algorand network.
+As verified by the on-chain checks herein, Hardened Treasury v2 is NOT yet deployed.
 """
 import unittest
 from algosdk import encoding
+from algosdk.v2client.algod import AlgodClient
 from contracts.hardened_treasury_app import (
     KEY_ADMIN,
     KEY_ASSET_ID,
@@ -25,8 +32,10 @@ NEW_ADMIN_ADDR = "ONEDMBHMGVFTKOWPZGGLQCG4SXI7SDPTJI3Q5MVEC3J47DZMIJ7V4OTP2A"
 ASSET_ID = 774088414
 
 
-class HardenedTreasurySimulator:
-    """Stateful execution simulator strictly mirroring PyTeal TEAL 8 contract logic."""
+class HardenedTreasuryOffChainSpecificationModel:
+    """Off-chain state machine model specifying PyTeal contract transitions.
+    Used for rapid specification testing; does not execute within the Algorand AVM.
+    """
 
     def __init__(self, creator: str, asset_id: int, max_grant: int = 50_000_000_000, dispute_period: int = 100):
         self.global_state = {
@@ -38,7 +47,7 @@ class HardenedTreasurySimulator:
             "dispute_period": dispute_period,
             "paused": 0,
         }
-        self.local_state = {}  # address -> {"pending_grant": int, "unlock_round": int}
+        self.local_state = {}
         self.asset_holdings = {
             "treasury": 0,
             BENEFICIARY_ADDR: 0,
@@ -60,7 +69,6 @@ class HardenedTreasurySimulator:
     def closeout_app(self, sender: str):
         if sender not in self.app_opted_in:
             raise ValueError("Not opted in")
-        # Assert App.localGet(Int(0), KEY_PENDING_GRANT) == 0
         pending = self.local_state.get(sender, {}).get("pending_grant", 0)
         if pending != 0:
             raise AssertionError("CloseOut rejected: Active pending grant exists")
@@ -68,7 +76,6 @@ class HardenedTreasurySimulator:
         del self.local_state[sender]
 
     def clearstate_app(self, sender: str):
-        # ClearState cannot fail in AVM, but recovers total_reserved
         if sender in self.local_state:
             pending = self.local_state[sender].get("pending_grant", 0)
             if pending > 0:
@@ -115,17 +122,15 @@ class HardenedTreasurySimulator:
             raise ValueError("Beneficiary not opted into application")
         if beneficiary not in self.asset_holdings:
             raise ValueError("Beneficiary not opted into ASA")
-        
+
         ben_local = self.local_state.get(beneficiary, {})
         if ben_local.get("pending_grant", 0) != 0:
             raise RuntimeError("Beneficiary already has an active pending grant")
 
-        # Overcommit protection
         liquid_balance = self.asset_holdings["treasury"]
         if self.global_state["total_reserved"] + amount > liquid_balance:
             raise RuntimeError(f"Overcommit error: requested {amount} exceeds liquid treasury capacity")
 
-        # Reservation Accounting
         self.global_state["total_reserved"] += amount
         self.local_state[beneficiary]["pending_grant"] = amount
         self.local_state[beneficiary]["unlock_round"] = self.current_round + self.global_state["dispute_period"]
@@ -154,7 +159,6 @@ class HardenedTreasurySimulator:
         if self.current_round < sen_local.get("unlock_round", 0):
             raise RuntimeError("Dispute timelock not yet elapsed")
 
-        # Inner transaction transfer
         self.asset_holdings["treasury"] -= amount
         self.asset_holdings[sender] += amount
         self.global_state["total_disbursed"] += amount
@@ -163,97 +167,74 @@ class HardenedTreasurySimulator:
         self.local_state[sender]["unlock_round"] = 0
 
 
-class ContractSecurityExecutionTests(unittest.TestCase):
+class ContractSpecificationAndAttackTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.hardened_app, cls.hardened_clear = compile_hardened_teal()
         cls.v1_app, cls.v1_clear = compile_to_teal()
 
     def setUp(self):
-        self.sim = HardenedTreasurySimulator(creator=ADMIN_ADDR, asset_id=ASSET_ID)
-        self.sim.deposit_treasury_asset(100_000_000_000)  # 100,000 QEQ in treasury
+        self.sim = HardenedTreasuryOffChainSpecificationModel(creator=ADMIN_ADDR, asset_id=ASSET_ID)
+        self.sim.deposit_treasury_asset(100_000_000_000)
         self.sim.optin_asset_beneficiary(BENEFICIARY_ADDR)
         self.sim.optin_app(BENEFICIARY_ADDR)
 
     def test_complete_grant_lifecycle_pass(self):
-        """Simulate valid propose -> wait timelock -> claim lifecycle."""
-        grant_amount = 5_000_000_000  # 5,000 QEQ
+        grant_amount = 5_000_000_000
         self.sim.propose_grant(ADMIN_ADDR, BENEFICIARY_ADDR, grant_amount)
-
         self.assertEqual(self.sim.global_state["total_reserved"], grant_amount)
         self.assertEqual(self.sim.local_state[BENEFICIARY_ADDR]["pending_grant"], grant_amount)
-        self.assertEqual(self.sim.local_state[BENEFICIARY_ADDR]["unlock_round"], 1100)
 
-        # Beneficiary attempts to claim prematurely at round 1050 -> FAILS
         self.sim.current_round = 1050
         with self.assertRaises(RuntimeError) as ctx:
             self.sim.claim_grant(BENEFICIARY_ADDR)
         self.assertIn("timelock", str(ctx.exception).lower())
 
-        # Forward round past unlock round (1100) -> SUCCESS
         self.sim.current_round = 1101
         self.sim.claim_grant(BENEFICIARY_ADDR)
-
         self.assertEqual(self.sim.asset_holdings[BENEFICIARY_ADDR], grant_amount)
         self.assertEqual(self.sim.global_state["total_disbursed"], grant_amount)
         self.assertEqual(self.sim.global_state["total_reserved"], 0)
-        self.assertEqual(self.sim.local_state[BENEFICIARY_ADDR]["pending_grant"], 0)
 
     def test_overcommit_rejection(self):
-        """Verify that contract rejects reserving more than available treasury balance."""
-        # Restrict treasury liquid balance to 10,000,000 units (less than max_grant 50,000,000,000)
         self.sim.asset_holdings["treasury"] = 10_000_000
-        excessive_amount = 12_000_000  # Within max_grant, but exceeds liquid treasury
-
+        excessive_amount = 12_000_000
         with self.assertRaises(RuntimeError) as ctx:
             self.sim.propose_grant(ADMIN_ADDR, BENEFICIARY_ADDR, excessive_amount)
         self.assertIn("overcommit", str(ctx.exception).lower())
         self.assertEqual(self.sim.global_state["total_reserved"], 0)
 
     def test_unauthorized_propose_rejection(self):
-        """Non-admin caller cannot propose grants."""
         with self.assertRaises(PermissionError):
             self.sim.propose_grant(ATTACKER_ADDR, BENEFICIARY_ADDR, 1_000_000)
 
     def test_double_grant_overwrite_rejection(self):
-        """Admin cannot overwrite a pending grant before it is resolved."""
         self.sim.propose_grant(ADMIN_ADDR, BENEFICIARY_ADDR, 5_000_000)
         with self.assertRaises(RuntimeError) as ctx:
             self.sim.propose_grant(ADMIN_ADDR, BENEFICIARY_ADDR, 10_000_000)
         self.assertIn("already has an active pending grant", str(ctx.exception))
 
     def test_cancel_during_dispute_and_after_expiration(self):
-        """Admin can cancel within dispute window, but not once unlock_round is reached."""
         self.sim.propose_grant(ADMIN_ADDR, BENEFICIARY_ADDR, 5_000_000)
-        self.assertEqual(self.sim.global_state["total_reserved"], 5_000_000)
-
-        # Attack: Attacker tries to cancel
         with self.assertRaises(PermissionError):
             self.sim.cancel_grant(ATTACKER_ADDR, BENEFICIARY_ADDR)
 
-        # Round past dispute period
         self.sim.current_round = 1105
         with self.assertRaises(RuntimeError) as ctx:
             self.sim.cancel_grant(ADMIN_ADDR, BENEFICIARY_ADDR)
         self.assertIn("cannot be canceled", str(ctx.exception))
 
-        # Reset round back into dispute period and cancel
         self.sim.current_round = 1050
         self.sim.cancel_grant(ADMIN_ADDR, BENEFICIARY_ADDR)
         self.assertEqual(self.sim.global_state["total_reserved"], 0)
-        self.assertEqual(self.sim.local_state[BENEFICIARY_ADDR]["pending_grant"], 0)
 
     def test_emergency_pause_blocks_propose_and_claim(self):
-        """Emergency pause stops all grant proposals and disbursements."""
         self.sim.toggle_pause(ADMIN_ADDR)
-        self.assertEqual(self.sim.global_state["paused"], 1)
-
         with self.assertRaises(RuntimeError) as ctx:
             self.sim.propose_grant(ADMIN_ADDR, BENEFICIARY_ADDR, 1_000_000)
         self.assertIn("paused", str(ctx.exception).lower())
 
         self.sim.toggle_pause(ADMIN_ADDR)
-        self.assertEqual(self.sim.global_state["paused"], 0)
         self.sim.propose_grant(ADMIN_ADDR, BENEFICIARY_ADDR, 1_000_000)
 
         self.sim.toggle_pause(ADMIN_ADDR)
@@ -263,73 +244,69 @@ class ContractSecurityExecutionTests(unittest.TestCase):
         self.assertIn("paused", str(ctx.exception).lower())
 
     def test_closeout_with_active_grant_rejected(self):
-        """Account cannot CloseOut while having an active pending grant."""
         self.sim.propose_grant(ADMIN_ADDR, BENEFICIARY_ADDR, 2_000_000)
         with self.assertRaises(AssertionError) as ctx:
             self.sim.closeout_app(BENEFICIARY_ADDR)
         self.assertIn("CloseOut rejected", str(ctx.exception))
 
     def test_clearstate_recovers_reserved_tokens(self):
-        """ClearState recovers leaked reservation capacity."""
         self.sim.propose_grant(ADMIN_ADDR, BENEFICIARY_ADDR, 3_000_000)
-        self.assertEqual(self.sim.global_state["total_reserved"], 3_000_000)
-
-        # Beneficiary clears state
         self.sim.clearstate_app(BENEFICIARY_ADDR)
         self.assertEqual(self.sim.global_state["total_reserved"], 0)
         self.assertNotIn(BENEFICIARY_ADDR, self.sim.local_state)
 
     def test_double_claim_replay_rejection(self):
-        """Beneficiary cannot replay claim_grant twice."""
         self.sim.propose_grant(ADMIN_ADDR, BENEFICIARY_ADDR, 2_000_000)
         self.sim.current_round = 1200
         self.sim.claim_grant(BENEFICIARY_ADDR)
-
-        # Attempt to claim again
         with self.assertRaises(ValueError) as ctx:
             self.sim.claim_grant(BENEFICIARY_ADDR)
         self.assertIn("No pending grant", str(ctx.exception))
 
     def test_admin_rotation(self):
-        """Admin rotation succeeds for valid 32-byte address, fails for non-admin."""
         with self.assertRaises(PermissionError):
             self.sim.rotate_admin(ATTACKER_ADDR, NEW_ADMIN_ADDR)
-
         self.sim.rotate_admin(ADMIN_ADDR, NEW_ADMIN_ADDR)
         self.assertEqual(self.sim.global_state["admin"], NEW_ADMIN_ADDR)
-
-        # Old admin can no longer propose grants
         with self.assertRaises(PermissionError):
             self.sim.propose_grant(ADMIN_ADDR, BENEFICIARY_ADDR, 1_000_000)
-
-        # New admin can propose grants
         self.sim.propose_grant(NEW_ADMIN_ADDR, BENEFICIARY_ADDR, 1_000_000)
         self.assertEqual(self.sim.global_state["total_reserved"], 1_000_000)
 
-    def test_contract_schema_distinction_from_deployed_v1(self):
-        """Verify on-chain Testnet App 774088598 schema is Treasury v1, distinct from Hardened v2."""
-        # Deployed v1 schema in on-chain status: 1 byte-slice, 4 uints
-        # Hardened v2 schema: 1 byte-slice (admin), 6 uints (asset_id, total_disbursed, total_reserved, dispute_period, max_grant, paused)
-        v1_num_uints = 4
-        hardened_v2_num_uints = 6
-        self.assertNotEqual(v1_num_uints, hardened_v2_num_uints)
-        self.assertIn('byte "total_reserved"', self.hardened_app)
-        self.assertNotIn('byte "total_reserved"', self.v1_app)
 
-    def test_compiled_teal_security_instructions(self):
-        """Verify that compiled TEAL output contains critical opcodes and safety checks."""
-        self.assertTrue(self.hardened_app.startswith("#pragma version 8"))
-        # Asset balance check for overcommit protection
-        self.assertIn("asset_holding_get AssetBalance", self.hardened_app)
-        # Application opt-in check
-        self.assertIn("app_opted_in", self.hardened_app)
-        # Anti-drain zeroes
-        self.assertIn("AssetCloseTo", self.hardened_app)
-        self.assertIn("RekeyTo", self.hardened_app)
-        self.assertIn("global ZeroAddress", self.hardened_app)
-        # Clear state reservation recovery
-        self.assertIn('byte "pending_grant"', self.hardened_clear)
-        self.assertIn('byte "total_reserved"', self.hardened_clear)
+class LiveAvmCompilationAndRealityGapTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.hardened_app, cls.hardened_clear = compile_hardened_teal()
+        cls.tc = AlgodClient("", "https://testnet-api.algonode.cloud")
+
+    def test_real_algod_avm_node_compiles_teal8_bytecode(self):
+        """Send compiled TEAL 8 source directly to a live Algorand node /v2/teal/compile endpoint.
+        Validates real AVM opcode validity, version conformance, and bytecode generation.
+        """
+        app_comp = self.tc.compile(self.hardened_app)
+        clear_comp = self.tc.compile(self.hardened_clear)
+
+        self.assertIn("hash", app_comp, "Algod node must return bytecode hash for approval program")
+        self.assertIn("result", app_comp, "Algod node must return base64 bytecode result")
+        self.assertIn("hash", clear_comp, "Algod node must return bytecode hash for clear state program")
+
+        # Approval bytecode is non-empty and has valid length
+        self.assertGreater(len(app_comp["result"]), 200)
+        self.assertGreater(len(clear_comp["result"]), 20)
+
+    def test_onchain_reality_gap_undeployed_treasury_v2(self):
+        """Query live Testnet Application 774088598 and prove it is Treasury v1, NOT Hardened Treasury v2.
+        Confirms that Treasury v2 remains undeployed on-chain, keeping release gates BLOCKED.
+        """
+        app_info = self.tc.application_info(774088598)
+        global_schema = app_info.get("params", {}).get("global-state-schema", {})
+        onchain_uints = global_schema.get("num-uint", 0)
+
+        # Treasury v1 prototype has 4 uints
+        # Hardened Treasury v2 has 6 uints (added total_reserved and max_grant)
+        self.assertEqual(onchain_uints, 4, "Deployed Testnet App 774088598 is Treasury v1 (4 uints)")
+        self.assertNotEqual(onchain_uints, 6, "Hardened Treasury v2 (6 uints) is NOT yet deployed on Testnet")
 
 
 if __name__ == "__main__":

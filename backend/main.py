@@ -2,6 +2,7 @@
 Connects directly to live Algorand blockchain nodes, enforces persistent relational storage,
 audit logging, strict security headers, and ML-DSA-65 post-quantum verification.
 """
+import base64
 import json
 import os
 import sys
@@ -80,7 +81,19 @@ TESTNET_INDEXER = os.getenv("TESTNET_INDEXER_URL", "https://testnet-idx.algonode
 MAINNET_ASSET_ID = int(os.getenv("MAINNET_ASSET_ID", "3737683297"))
 TESTNET_ASSET_ID = int(os.getenv("TESTNET_ASSET_ID", "774088414"))
 TESTNET_APP_ID = int(os.getenv("TESTNET_APP_ID", "774088598"))
-ADMIN_API_KEY = os.getenv("ADMIN_API_KEY", "qeq-admin-secure-vault-2026")
+ADMIN_API_KEY = os.getenv("ADMIN_API_KEY")
+ADMIN_OPERATOR_IDENTITY = os.getenv("ADMIN_OPERATOR_IDENTITY", "verified_council_lead")
+TESTNET_TREASURY_APP_ADDRESS = os.getenv(
+    "TESTNET_TREASURY_APP_ADDRESS", "A2SUZAVEYRGQNXG7PMJP3W3JZHA7F24PRUTGHOQ4Q6AEWC574VR7S5OZEE"
+)
+AUTHORIZED_TREASURY_ADDRESSES = {
+    a.strip()
+    for a in os.getenv(
+        "AUTHORIZED_TREASURY_ADDRESSES",
+        f"{TESTNET_TREASURY_APP_ADDRESS},TPLMGGFNG64LKOCKVB7ZMQH5AMSNMV4GLI7GCH4FY2XQEKSIGB77O6LCFM",
+    ).split(",")
+    if a.strip()
+}
 
 security = HTTPBearer(auto_error=False)
 
@@ -89,7 +102,17 @@ def get_authenticated_admin(
     request: Request,
     creds: Optional[HTTPAuthorizationCredentials] = Depends(security),
 ) -> str:
-    """Enforce strict administrative authorization for governance actions."""
+    """Enforce strict administrative authorization for governance actions.
+    Fails closed if ADMIN_API_KEY is not configured in the host environment.
+    Derives operator identity strictly from server-side verified configuration,
+    never trusting caller-supplied headers.
+    """
+    if not ADMIN_API_KEY:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Administrative operations disabled: ADMIN_API_KEY is not configured in environment.",
+        )
+
     token = None
     if creds:
         token = creds.credentials
@@ -102,18 +125,40 @@ def get_authenticated_admin(
             detail="Unauthorized: Valid administrative Bearer token or X-Admin-Key header required.",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    return request.headers.get("x-admin-identity", "authorized_council_admin")
+
+    # Reviewer identity derived strictly from server configuration
+    return ADMIN_OPERATOR_IDENTITY
 
 
 def verify_onchain_disbursement_tx(
     tx_id: str,
+    proposal_id: str,
     beneficiary_address: str,
     expected_amount_qeq: int,
+    db: Session,
     network: str = "testnet",
 ) -> Dict[str, Any]:
     """Verify live on-chain Algorand settlement for grant disbursements.
-    Guarantees that the transaction confirmed, transfers QEQ ASA, to beneficiary, with full amount.
+    Guarantees:
+    1. Replay prevention: tx_id has not already been used for another proposal in DB.
+    2. Confirmation: tx has confirmed on the target Algorand network.
+    3. Sender: must be the authorized treasury escrow/disburser address.
+    4. Asset: matches expected QEQ ASA ID.
+    5. Receiver: matches registered proposal beneficiary address.
+    6. Amount: transfers at least the requested amount in base units.
+    7. Grant binding: if note is present, validates note binds to proposal_id.
     """
+    # 1. Durable Replay Check in Database
+    existing = db.query(GrantProposal).filter(
+        GrantProposal.onchain_tx_id == tx_id,
+        GrantProposal.id != proposal_id,
+    ).first()
+    if existing:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Transaction replay rejected: Transaction {tx_id} was already used to disburse proposal {existing.id}.",
+        )
+
     expected_asset_id = MAINNET_ASSET_ID if network == "mainnet" else TESTNET_ASSET_ID
     expected_base_units = expected_amount_qeq * (10 ** 6)
     idx_url = MAINNET_INDEXER if network == "mainnet" else TESTNET_INDEXER
@@ -122,7 +167,7 @@ def verify_onchain_disbursement_tx(
     tx = None
     confirmed_round = 0
 
-    # 1. Query Indexer
+    # Query Indexer
     try:
         with httpx.Client(timeout=10.0) as client:
             resp = client.get(f"{idx_url}/v2/transactions/{tx_id}")
@@ -133,7 +178,7 @@ def verify_onchain_disbursement_tx(
     except Exception:
         pass
 
-    # 2. Fall back to Algod pending transaction info
+    # Fall back to Algod pending transaction info
     if not tx:
         try:
             algod_client = AlgodClient("", algod_url)
@@ -156,42 +201,57 @@ def verify_onchain_disbursement_tx(
             detail=f"Disbursement transaction {tx_id} is pending and not yet confirmed on {network} ledger.",
         )
 
-    # 3. Verify asset transfer details
-    is_valid_payout = False
+    # 2. Extract transfer fields and note
     details_found = []
+    tx_sender = None
+    tx_receiver = None
+    tx_asset_id = None
+    tx_amount = 0
+    raw_note = None
 
     if "asset-transfer-transaction" in tx:
         axfer = tx["asset-transfer-transaction"]
-        asset_id = axfer.get("asset-id")
-        receiver = axfer.get("receiver")
-        amount = axfer.get("amount", 0)
-        details_found.append(f"axfer: asset={asset_id}, receiver={receiver}, amount={amount}")
-        if asset_id == expected_asset_id and receiver == beneficiary_address and amount >= expected_base_units:
-            is_valid_payout = True
+        tx_sender = tx.get("sender") or axfer.get("sender")
+        tx_asset_id = axfer.get("asset-id")
+        tx_receiver = axfer.get("receiver")
+        tx_amount = axfer.get("amount", 0)
+        raw_note = tx.get("note")
+        details_found.append(f"axfer: sender={tx_sender}, asset={tx_asset_id}, receiver={tx_receiver}, amount={tx_amount}")
 
-    if not is_valid_payout and "inner-txns" in tx:
+    elif "inner-txns" in tx:
         for inner in tx["inner-txns"]:
             if "asset-transfer-transaction" in inner:
                 axfer = inner["asset-transfer-transaction"]
-                asset_id = axfer.get("asset-id")
-                receiver = axfer.get("receiver")
-                amount = axfer.get("amount", 0)
-                details_found.append(f"inner-axfer: asset={asset_id}, receiver={receiver}, amount={amount}")
-                if asset_id == expected_asset_id and receiver == beneficiary_address and amount >= expected_base_units:
-                    is_valid_payout = True
-                    break
+                tx_sender = inner.get("sender") or tx.get("sender")
+                tx_asset_id = axfer.get("asset-id")
+                tx_receiver = axfer.get("receiver")
+                tx_amount = axfer.get("amount", 0)
+                raw_note = inner.get("note") or tx.get("note")
+                details_found.append(f"inner-axfer: sender={tx_sender}, asset={tx_asset_id}, receiver={tx_receiver}, amount={tx_amount}")
+                break
 
-    if not is_valid_payout and "txn" in tx and "txn" in tx["txn"]:
+    elif "txn" in tx and "txn" in tx["txn"]:
         raw_txn = tx["txn"]["txn"]
         if raw_txn.get("type") == "axfer":
-            asset_id = raw_txn.get("xaid")
-            receiver = raw_txn.get("arcv")
-            amount = raw_txn.get("aamt", 0)
-            details_found.append(f"algod-axfer: asset={asset_id}, receiver={receiver}, amount={amount}")
-            if asset_id == expected_asset_id and receiver == beneficiary_address and amount >= expected_base_units:
-                is_valid_payout = True
+            tx_sender = raw_txn.get("snd")
+            tx_asset_id = raw_txn.get("xaid")
+            tx_receiver = raw_txn.get("arcv")
+            tx_amount = raw_txn.get("aamt", 0)
+            raw_note = raw_txn.get("note")
+            details_found.append(f"algod-axfer: sender={tx_sender}, asset={tx_asset_id}, receiver={tx_receiver}, amount={tx_amount}")
 
-    if not is_valid_payout:
+    # 3. Verify authorized treasury sender
+    if AUTHORIZED_TREASURY_ADDRESSES and tx_sender not in AUTHORIZED_TREASURY_ADDRESSES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"Unauthorized disbursement sender: Transaction sender {tx_sender} is not an authorized "
+                f"treasury or disburser address ({', '.join(AUTHORIZED_TREASURY_ADDRESSES)})."
+            ),
+        )
+
+    # 4. Verify asset, beneficiary, and amount
+    if tx_asset_id != expected_asset_id or tx_receiver != beneficiary_address or tx_amount < expected_base_units:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=(
@@ -201,9 +261,23 @@ def verify_onchain_disbursement_tx(
             ),
         )
 
+    # 5. Verify grant note binding if present
+    if raw_note:
+        try:
+            decoded_note = base64.b64decode(raw_note).decode("utf-8", errors="ignore")
+            if "qeq:grant:" in decoded_note and proposal_id not in decoded_note:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Grant binding mismatch: Transaction note specifies a different grant ({decoded_note}) than {proposal_id}.",
+                )
+        except Exception as e:
+            if isinstance(e, HTTPException):
+                raise e
+
     return {
         "tx_id": tx_id,
         "confirmed_round": confirmed_round,
+        "sender": tx_sender,
         "network": network,
         "verified": True,
     }
@@ -465,8 +539,10 @@ def record_disbursement(
     # Live On-Chain Settlement Verification Gate
     verification = verify_onchain_disbursement_tx(
         tx_id=req.onchain_tx_id,
+        proposal_id=proposal.id,
         beneficiary_address=proposal.beneficiary_address,
         expected_amount_qeq=proposal.requested_amount_qeq,
+        db=db,
         network=network,
     )
 

@@ -53,6 +53,7 @@
     "mitigation_runbook": "docs/INCIDENT_RESPONSE_KEY_EXPOSURE.md",
     "unsigned_generator": "scripts/rotate_authority_txns.py"
   },
+  "approved_safe_authority_address": null,
   "identifiers": {
     "mainnet_asset_id": 3737683297,
     "mainnet_tx_id": "U5LVAFLK462ARKMWPDFZVX5MN24534CDZZ5AXDFHXWGF3R4O2FSA",

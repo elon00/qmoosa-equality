@@ -57,7 +57,7 @@ class GrantProposal(Base):
     description = Column(Text, nullable=False)
     status = Column(String(30), nullable=False, default=GrantStatus.SUBMITTED, index=True)
     reviewer_notes = Column(Text, nullable=True)
-    onchain_tx_id = Column(String(64), nullable=True)
+    onchain_tx_id = Column(String(64), nullable=True, unique=True, index=True)
     created_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc), nullable=False)
     updated_at = Column(
         DateTime,
