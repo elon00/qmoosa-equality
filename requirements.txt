@@ -4,3 +4,4 @@ pyteal==0.27.0
 fastapi==0.143.0
 uvicorn==0.54.0
 sqlalchemy==2.1.4
+httpx==0.28.1
