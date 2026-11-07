@@ -1,0 +1,170 @@
+{
+  "engine": "REA_Reverse_Engineer_Anything",
+  "status": "STRUCTURE_RECONSTRUCTED",
+  "analyzed_files": 54,
+  "manifest": {
+    "README.md": {
+      "bytes": 6486
+    },
+    "requirements.txt": {
+      "bytes": 127
+    },
+    "STATUS.json": {
+      "bytes": 5366
+    },
+    "assets\\qeq_arc3_metadata.json": {
+      "bytes": 1158
+    },
+    "backend\\auth.py": {
+      "bytes": 3516
+    },
+    "backend\\db.py": {
+      "bytes": 8870
+    },
+    "backend\\grants.py": {
+      "bytes": 10874
+    },
+    "backend\\main.py": {
+      "bytes": 7572
+    },
+    "backend\\middleware.py": {
+      "bytes": 4347
+    },
+    "backend\\settlement.py": {
+      "bytes": 17167
+    },
+    "contracts\\hardened_treasury_app.py": {
+      "bytes": 12131
+    },
+    "contracts\\treasury_app.py": {
+      "bytes": 5441
+    },
+    "contracts\\treasury_approval.teal": {
+      "bytes": 2596
+    },
+    "contracts\\treasury_clear.teal": {
+      "bytes": 32
+    },
+    "contracts\\__init__.py": {
+      "bytes": 20
+    },
+    "docs\\DESIGN.md": {
+      "bytes": 5630
+    },
+    "docs\\INCIDENT_RESPONSE_KEY_EXPOSURE.md": {
+      "bytes": 4348
+    },
+    "docs\\INTEGRATIONS_ANALYSIS.md": {
+      "bytes": 5366
+    },
+    "docs\\MARKET_READINESS_REPORT.md": {
+      "bytes": 3531
+    },
+    "docs\\OPERATIONAL_READINESS.md": {
+      "bytes": 13992
+    },
+    "docs\\TOKENOMICS_AND_ISSUANCE.md": {
+      "bytes": 7306
+    },
+    "frontend\\index.html": {
+      "bytes": 25646
+    },
+    "men\\economics.py": {
+      "bytes": 968
+    },
+    "men\\integrations.py": {
+      "bytes": 1627
+    },
+    "men\\pqc.py": {
+      "bytes": 735
+    },
+    "men\\__init__.py": {
+      "bytes": 61
+    },
+    "migrations\\run_migrations.py": {
+      "bytes": 7079
+    },
+    "scripts\\check.py": {
+      "bytes": 16040
+    },
+    "scripts\\compile_contracts.py": {
+      "bytes": 1217
+    },
+    "scripts\\db_backup_restore.py": {
+      "bytes": 4351
+    },
+    "scripts\\deploy_mainnet.py": {
+      "bytes": 6379
+    },
+    "scripts\\deploy_testnet.py": {
+      "bytes": 6039
+    },
+    "scripts\\deploy_treasury.py": {
+      "bytes": 4413
+    },
+    "scripts\\prepare_asset.py": {
+      "bytes": 1181
+    },
+    "scripts\\publish_github.sh": {
+      "bytes": 469
+    },
+    "scripts\\rea_inspector.py": {
+      "bytes": 1485
+    },
+    "scripts\\rotate_authority_txns.py": {
+      "bytes": 3915
+    },
+    "scripts\\rsi_engine.py": {
+      "bytes": 2039
+    },
+    "scripts\\tinyman_pool_guide.py": {
+      "bytes": 1226
+    },
+    "scripts\\verify_deployment.py": {
+      "bytes": 5800
+    },
+    "tests\\reality_check_harness.py": {
+      "bytes": 1250
+    },
+    "tests\\test_api.py": {
+      "bytes": 18340
+    },
+    "tests\\test_contracts.py": {
+      "bytes": 18298
+    },
+    "tests\\test_core.py": {
+      "bytes": 1590
+    },
+    "tests\\test_crypto.py": {
+      "bytes": 655
+    },
+    "wiki\\Algorand-Mainnet-Deployment.md": {
+      "bytes": 2319
+    },
+    "wiki\\Algorand-Testnet-Deployment.md": {
+      "bytes": 2276
+    },
+    "wiki\\Home.md": {
+      "bytes": 1962
+    },
+    "wiki\\Post-Quantum-Cryptography.md": {
+      "bytes": 1922
+    },
+    "wiki\\Reality-Gate.md": {
+      "bytes": 3897
+    },
+    "wiki\\Tokenomics-and-Inclusion.md": {
+      "bytes": 2776
+    },
+    ".github\\workflows\\qmoosa-rsi-rea-sync.yml": {
+      "bytes": 531
+    },
+    ".github\\workflows\\verify.yml": {
+      "bytes": 2104
+    },
+    "tests\\integration\\test_migrations.py": {
+      "bytes": 5640
+    }
+  },
+  "timestamp": 1794022530
+}
