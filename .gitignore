@@ -8,3 +8,6 @@ __pycache__/
 *.db
 data/*.db
 data/backups/
+
+# Lean 4 build artifacts
+lean_verify/.lake/
